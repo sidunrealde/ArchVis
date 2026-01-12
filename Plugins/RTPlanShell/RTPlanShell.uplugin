@@ -1,0 +1,42 @@
+﻿{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "RTPlanShell",
+	"Description": "Walls, floors, ceilings, collision",
+	"Category": "ArchVis",
+	"CreatedBy": "ArchVis Team",
+	"CreatedByURL": "",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"CanContainContent": false,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": false,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "RTPlanShell",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "RTPlanCore",
+			"Enabled": true
+		},
+		{
+			"Name": "RTPlanMeshing",
+			"Enabled": true
+		},
+		{
+			"Name": "RTPlanMath",
+			"Enabled": true
+		},
+		{
+			"Name": "RTPlanOpenings",
+			"Enabled": true
+		}
+	]
+}

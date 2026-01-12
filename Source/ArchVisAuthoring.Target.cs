@@ -1,0 +1,17 @@
+﻿// Copyright Epic Games, Inc. All Rights Reserved.
+
+using UnrealBuildTool;
+using System.Collections.Generic;
+
+public class ArchVisAuthoringTarget : TargetRules
+{
+	public ArchVisAuthoringTarget(TargetInfo Target) : base(Target)
+	{
+		Type = TargetType.Game;
+		DefaultBuildSettings = BuildSettingsVersion.V6;
+		IncludeOrderVersion = EngineIncludeOrderVersion.Unreal5_7;
+		ExtraModuleNames.Add("ArchVis");
+		
+		ProjectDefinitions.Add("ARCHVIS_AUTHORING=1");
+	}
+}

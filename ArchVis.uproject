@@ -1,0 +1,98 @@
+{
+	"FileVersion": 3,
+	"EngineAssociation": "5.7",
+	"Category": "",
+	"Description": "",
+	"Modules": [
+		{
+			"Name": "ArchVis",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "ModelingToolsEditorMode",
+			"Enabled": true,
+			"TargetAllowList": [
+				"Editor"
+			]
+		},
+		{
+			"Name": "RTPlanCore",
+			"Enabled": true
+		},
+		{
+			"Name": "RTPlanMath",
+			"Enabled": true
+		},
+		{
+			"Name": "RTPlanSpatial",
+			"Enabled": true
+		},
+		{
+			"Name": "RTPlanInput",
+			"Enabled": true
+		},
+		{
+			"Name": "RTPlanTools",
+			"Enabled": true
+		},
+		{
+			"Name": "RTPlanMeshing",
+			"Enabled": true
+		},
+		{
+			"Name": "RTPlanShell",
+			"Enabled": true
+		},
+		{
+			"Name": "RTPlanOpenings",
+			"Enabled": true
+		},
+		{
+			"Name": "RTPlanCatalog",
+			"Enabled": true
+		},
+		{
+			"Name": "RTPlanObjects",
+			"Enabled": true
+		},
+		{
+			"Name": "RTPlanRuns",
+			"Enabled": true
+		},
+		{
+			"Name": "RTPlanUI",
+			"Enabled": true
+		},
+		{
+			"Name": "RTPlanVR",
+			"Enabled": true
+		},
+		{
+			"Name": "RTPlanNet",
+			"Enabled": true
+		},
+		{
+			"Name": "RTFeature_Drafting2D",
+			"Enabled": true
+		},
+		{
+			"Name": "RTFeature_Shell3D",
+			"Enabled": true
+		},
+		{
+			"Name": "RTFeature_Interiors",
+			"Enabled": true
+		},
+		{
+			"Name": "RTFeature_VR",
+			"Enabled": true
+		},
+		{
+			"Name": "RTFeature_Multiplayer",
+			"Enabled": true
+		}
+	]
+}

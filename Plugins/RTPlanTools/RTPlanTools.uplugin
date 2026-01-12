@@ -1,0 +1,46 @@
+﻿{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "RTPlanTools",
+	"Description": "Tool framework + tools (command emitters)",
+	"Category": "ArchVis",
+	"CreatedBy": "ArchVis Team",
+	"CreatedByURL": "",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"CanContainContent": false,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": false,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "RTPlanTools",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "RTPlanCore",
+			"Enabled": true
+		},
+		{
+			"Name": "RTPlanInput",
+			"Enabled": true
+		},
+		{
+			"Name": "RTPlanSpatial",
+			"Enabled": true
+		},
+		{
+			"Name": "RTPlanCatalog",
+			"Enabled": true
+		},
+		{
+			"Name": "RTPlanObjects",
+			"Enabled": true
+		}
+	]
+}

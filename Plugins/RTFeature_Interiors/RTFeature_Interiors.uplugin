@@ -1,0 +1,42 @@
+﻿{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "RTFeature_Interiors",
+	"Description": "Feature bundle for interior objects and runs",
+	"Category": "ArchVis",
+	"CreatedBy": "ArchVis Team",
+	"CreatedByURL": "",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"CanContainContent": true,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": false,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "RTFeature_Interiors",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "RTPlanCore",
+			"Enabled": true
+		},
+		{
+			"Name": "RTPlanCatalog",
+			"Enabled": true
+		},
+		{
+			"Name": "RTPlanObjects",
+			"Enabled": true
+		},
+		{
+			"Name": "RTPlanRuns",
+			"Enabled": true
+		}
+	]
+}
