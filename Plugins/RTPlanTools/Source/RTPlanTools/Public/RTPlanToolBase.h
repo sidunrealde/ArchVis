@@ -29,8 +29,11 @@ public:
 	// Handle unified pointer input
 	virtual void OnPointerEvent(const FRTPointerEvent& Event);
 
-	// Handle numeric input (e.g. typing "150" for length)
+	// Handle numeric input (e.g. typing "150" for length) - legacy, assumes length
 	virtual void OnNumericInput(float Value) {}
+
+	// Handle numeric input with field type specification
+	virtual void OnNumericInputWithField(float Value, ERTNumericField Field) { OnNumericInput(Value); }
 
 	// Render tool visualization (gizmos, preview lines)
 	// Usually called from the HUD or a SceneProxy
