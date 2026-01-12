@@ -55,8 +55,8 @@ protected:
 	EArchVisViewMode CurrentViewMode = EArchVisViewMode::TopDown2D;
 
 	// Settings
-	float MinZoom = 500.0f;
-	float MaxZoom = 5000.0f;
+	float MinZoom = 1000.0f;   // Minimum zoom distance (how close you can zoom in)
+	float MaxZoom = 20000.0f; // Maximum zoom distance (how far you can zoom out)
 	float ZoomSpeed = 100.0f;
 	float PanSpeed = 2.0f;
 	float OrbitSpeed = 2.0f;

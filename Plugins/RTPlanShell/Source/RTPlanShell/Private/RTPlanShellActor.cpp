@@ -81,30 +81,48 @@ void ARTPlanShellActor::RebuildAll()
 			float Angle = FMath::Atan2(Dir.Y, Dir.X);
 			FQuat WallRotation(FVector::UpVector, Angle);
 			
+			// Extend wall by half thickness at each end to eliminate corner gaps
+			float HalfThickness = Wall.ThicknessCm * 0.5f;
+			FVector2D ExtendedA = A - Dir * HalfThickness;
+			FVector2D ExtendedB = B + Dir * HalfThickness;
+			float ExtendedLength = Length + Wall.ThicknessCm;
+			
 			// Pivot Logic:
 			// GeometryScript AppendBox creates a box centered at (0,0,0) with extents X/Y/Z.
 			// So the bottom of the box is at Z = -Height/2.
 			// To place the bottom at BaseZCm, we need to shift the location up by Height/2.
 			float ZCenter = Wall.BaseZCm + (Wall.HeightCm * 0.5f);
-			
-			FVector WallStart(A.X, A.Y, ZCenter);
 
 			// Get Openings for this wall
 			TArray<FRTOpening>* Ops = WallOpenings.Find(Wall.Id);
 			
 			if (Ops && Ops->Num() > 0)
 			{
-				// Split Wall Logic
+				// Split Wall Logic - use original length for opening calculations
 				TArray<FRTPlanOpeningUtils::FInterval> Solids = FRTPlanOpeningUtils::ComputeSolidIntervals(Length, *Ops);
 
-				for (const auto& Solid : Solids)
+				for (int32 i = 0; i < Solids.Num(); ++i)
 				{
-					float SegLength = Solid.End - Solid.Start;
+					const auto& Solid = Solids[i];
+					float SegStart = Solid.Start;
+					float SegEnd = Solid.End;
+					
+					// Extend first segment backward and last segment forward
+					if (i == 0)
+					{
+						SegStart -= HalfThickness;
+					}
+					if (i == Solids.Num() - 1)
+					{
+						SegEnd += HalfThickness;
+					}
+					
+					float SegLength = SegEnd - SegStart;
 					if (SegLength < 0.1f) continue;
 
-					float MidDist = (Solid.Start + Solid.End) * 0.5f;
+					float MidDist = (SegStart + SegEnd) * 0.5f;
 					
-					// Calculate center of this segment in world space
+					// Calculate center of this segment in world space (relative to original A)
 					FVector2D SegCenter2D = A + Dir * MidDist;
 					FVector SegCenter(SegCenter2D.X, SegCenter2D.Y, ZCenter);
 
@@ -124,19 +142,20 @@ void ARTPlanShellActor::RebuildAll()
 			}
 			else
 			{
-				// Full Wall (No Openings)
-				FVector2D Mid = (A + B) * 0.5f;
+				// Full Wall (No Openings) - use extended length to eliminate corner gaps
+				FVector2D Mid = (ExtendedA + ExtendedB) * 0.5f;
 				
 				FTransform WallTransform;
 				WallTransform.SetLocation(FVector(Mid.X, Mid.Y, ZCenter));
 				WallTransform.SetRotation(WallRotation);
 
-				UE_LOG(LogRTPlanShell, Verbose, TEXT("Building Wall: Mid=(%s), ZCenter=%f, Height=%f"), *Mid.ToString(), ZCenter, Wall.HeightCm);
+				UE_LOG(LogRTPlanShell, Verbose, TEXT("Building Wall: Mid=(%s), ZCenter=%f, Height=%f, ExtendedLength=%f"), 
+					*Mid.ToString(), ZCenter, Wall.HeightCm, ExtendedLength);
 
 				FRTPlanMeshBuilder::AppendWallMesh(
 					Mesh,
 					WallTransform,
-					Length,
+					ExtendedLength,
 					Wall.ThicknessCm,
 					Wall.HeightCm,
 					0, 0, 0
