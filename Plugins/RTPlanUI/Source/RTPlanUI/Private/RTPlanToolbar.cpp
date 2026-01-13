@@ -13,3 +13,21 @@ void URTPlanToolbar::SelectTool(TSubclassOf<URTPlanToolBase> ToolClass)
 		ToolManager->SelectTool(ToolClass);
 	}
 }
+
+void URTPlanToolbar::SelectToolByType(ERTPlanToolType ToolType)
+{
+	if (ToolManager)
+	{
+		ToolManager->SelectToolByType(ToolType);
+	}
+}
+
+ERTPlanToolType URTPlanToolbar::GetActiveToolType() const
+{
+	if (ToolManager)
+	{
+		return ToolManager->GetActiveToolType();
+	}
+	return ERTPlanToolType::None;
+}
+

@@ -131,3 +131,26 @@ void AArchVisCameraController::Orbit(FVector2D Delta)
 		TargetRotation = NewRot;
 	}
 }
+
+void AArchVisCameraController::ResetView()
+{
+	// Reset to default position and zoom
+	TargetLocation = FVector::ZeroVector;
+	TargetArmLength = 5000.0f; // Default zoom level
+	
+	// Reset rotation based on current view mode
+	if (CurrentViewMode == EArchVisViewMode::TopDown2D)
+	{
+		TargetRotation = FRotator(-90.0f, -90.0f, 0.0f);
+	}
+	else
+	{
+		TargetRotation = FRotator(-45.0f, 0.0f, 0.0f);
+	}
+	
+	if (Camera && CurrentViewMode == EArchVisViewMode::TopDown2D)
+	{
+		Camera->OrthoWidth = TargetArmLength * 2.0f;
+	}
+}
+

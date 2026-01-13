@@ -23,4 +23,7 @@ public:
 
 	// Check if two segments intersect (A1-B1 and A2-B2)
 	static bool SegmentIntersection(const FVector2D& A1, const FVector2D& B1, const FVector2D& A2, const FVector2D& B2, FVector2D& OutIntersection);
+
+	// Check if two segments intersect (simplified, no intersection point returned)
+	static bool SegmentsIntersect(const FVector2D& A1, const FVector2D& B1, const FVector2D& A2, const FVector2D& B2);
 };

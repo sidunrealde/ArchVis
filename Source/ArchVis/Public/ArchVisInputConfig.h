@@ -7,7 +7,21 @@
 #include "ArchVisInputConfig.generated.h"
 
 /**
- * Data Asset to hold Input Actions for the ArchVis project.
+ * Data Asset to hold Input Actions and Mapping Contexts for the ArchVis project.
+ * 
+ * Context Hierarchy:
+ * IMC_Global (Priority: 0 - Always Active)
+ * │
+ * ├── IMC_2D_Base (Priority: 1 - When in 2D mode)
+ * │   ├── IMC_2D_Selection (Priority: 2)
+ * │   ├── IMC_2D_LineTool (Priority: 2)
+ * │   │   └── IMC_NumericEntry (Priority: 3 - Layered when typing)
+ * │   └── IMC_2D_PolylineTool (Priority: 2)
+ * │       └── IMC_NumericEntry (Priority: 3 - Layered when typing)
+ * │
+ * └── IMC_3D_Base (Priority: 1 - When in 3D mode)
+ *     ├── IMC_3D_Selection (Priority: 2)
+ *     └── IMC_3D_Navigation (Priority: 2)
  */
 UCLASS()
 class ARCHVIS_API UArchVisInputConfig : public UDataAsset
@@ -15,57 +29,248 @@ class ARCHVIS_API UArchVisInputConfig : public UDataAsset
 	GENERATED_BODY()
 
 public:
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Mapping")
-	TObjectPtr<UInputMappingContext> DefaultMappingContext;
+	// ============================================
+	// INPUT MAPPING CONTEXTS - Hierarchical Structure
+	// ============================================
+	
+	// Global context - always active, lowest priority (0)
+	// Contains: Undo/Redo, Delete, Escape, ToggleView, Save, Modifiers
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Contexts|Global")
+	TObjectPtr<UInputMappingContext> IMC_Global;
 
-	// --- Mouse/View Actions ---
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Mouse")
-	TObjectPtr<UInputAction> IA_LeftClick;
+	// --- 2D Mode Contexts ---
+	
+	// 2D Base context - active in 2D mode (Priority 1)
+	// Contains: Pan, Zoom, Pointer position, Grid/Snap toggles
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Contexts|2D")
+	TObjectPtr<UInputMappingContext> IMC_2D_Base;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Mouse")
-	TObjectPtr<UInputAction> IA_RightClick;
+	// 2D Selection tool context (Priority 2)
+	// Contains: Select, BoxSelect, SelectAll, DeselectAll
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Contexts|2D")
+	TObjectPtr<UInputMappingContext> IMC_2D_Selection;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Mouse")
-	TObjectPtr<UInputAction> IA_MouseMove;
+	// 2D Line tool context (Priority 2)
+	// Contains: DrawPlacePoint, DrawCancel, OrthoLock
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Contexts|2D")
+	TObjectPtr<UInputMappingContext> IMC_2D_LineTool;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Mouse")
-	TObjectPtr<UInputAction> IA_MouseWheel;
+	// 2D Polyline tool context (Priority 2)
+	// Contains: DrawPlacePoint, DrawConfirm, DrawCancel, DrawClose, DrawRemoveLastPoint
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Contexts|2D")
+	TObjectPtr<UInputMappingContext> IMC_2D_PolylineTool;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "View")
-	TObjectPtr<UInputAction> IA_ToggleView;
+	// Numeric Entry context - layered on top during numeric input (Priority 3)
+	// Contains: Digit keys, Decimal, Backspace, Arithmetic operators, Commit, Cancel
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Contexts|Numeric")
+	TObjectPtr<UInputMappingContext> IMC_NumericEntry;
 
-	// --- Numeric Entry Actions ---
-	// Digit keys (0-9). Create one IA with Digital(bool) value type.
-	// In IMC, map keys 0-9 with Scalar modifiers outputting 0.0-9.0.
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "NumericEntry")
-	TObjectPtr<UInputAction> IA_NumericDigit;
+	// --- 3D Mode Contexts ---
 
-	// Decimal point (.) key
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "NumericEntry")
-	TObjectPtr<UInputAction> IA_NumericDecimal;
+	// 3D Base context - active in 3D mode (Priority 1)
+	// Contains: Orbit, Pan, Zoom, Pointer position
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Contexts|3D")
+	TObjectPtr<UInputMappingContext> IMC_3D_Base;
 
-	// Backspace key - removes last character
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "NumericEntry")
-	TObjectPtr<UInputAction> IA_NumericBackspace;
+	// 3D Selection context (Priority 2)
+	// Contains: Select, SelectAdd, SelectToggle
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Contexts|3D")
+	TObjectPtr<UInputMappingContext> IMC_3D_Selection;
 
-	// Enter key - commits the numeric value to the active tool
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "NumericEntry")
-	TObjectPtr<UInputAction> IA_NumericCommit;
+	// 3D Navigation context (Priority 2)
+	// Contains: ViewTop, ViewFront, ViewRight, ViewPerspective
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Contexts|3D")
+	TObjectPtr<UInputMappingContext> IMC_3D_Navigation;
 
-	// Escape key - clears the input buffer and cancels
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "NumericEntry")
-	TObjectPtr<UInputAction> IA_NumericClear;
+	// ============================================
+	// GLOBAL INPUT ACTIONS (IMC_Global)
+	// ============================================
+	
+	// Modifier keys - helper actions for chord bindings
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Global|Modifiers")
+	TObjectPtr<UInputAction> IA_ModifierCtrl;
 
-	// Tab key - switches between Length and Angle fields
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "NumericEntry")
-	TObjectPtr<UInputAction> IA_NumericSwitchField;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Global|Modifiers")
+	TObjectPtr<UInputAction> IA_ModifierShift;
 
-	// U key (or other) - cycles through unit types (cm, m, in, ft)
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "NumericEntry")
-	TObjectPtr<UInputAction> IA_CycleUnits;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Global|Modifiers")
+	TObjectPtr<UInputAction> IA_ModifierAlt;
 
-	// --- Snap Modifier ---
-	// Shift key (or other) - toggles/holds snap on/off
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "SnapModifier")
-	TObjectPtr<UInputAction> IA_SnapModifier;
+	// Global commands
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Global")
+	TObjectPtr<UInputAction> IA_Undo;  // Ctrl+Z
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Global")
+	TObjectPtr<UInputAction> IA_Redo;  // Ctrl+Y
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Global")
+	TObjectPtr<UInputAction> IA_Delete;  // Delete key
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Global")
+	TObjectPtr<UInputAction> IA_Escape;  // Escape - cancel/deselect
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Global")
+	TObjectPtr<UInputAction> IA_ToggleView;  // Tab - switch 2D/3D
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Global")
+	TObjectPtr<UInputAction> IA_Save;  // Ctrl+S
+
+	// ============================================
+	// VIEW ACTIONS (IMC_2D_Base / IMC_3D_Base)
+	// ============================================
+	
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|View")
+	TObjectPtr<UInputAction> IA_Pan;  // MMB held
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|View")
+	TObjectPtr<UInputAction> IA_PanDelta;  // Mouse XY / Arrow keys
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|View")
+	TObjectPtr<UInputAction> IA_Zoom;  // Mouse wheel
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|View")
+	TObjectPtr<UInputAction> IA_Orbit;  // RMB held (3D only)
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|View")
+	TObjectPtr<UInputAction> IA_OrbitDelta;  // Mouse XY for orbit
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|View")
+	TObjectPtr<UInputAction> IA_ResetView;  // Home key
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|View")
+	TObjectPtr<UInputAction> IA_FocusSelection;  // F key
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|View")
+	TObjectPtr<UInputAction> IA_PointerPosition;  // Mouse XY tracking
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|View")
+	TObjectPtr<UInputAction> IA_SnapToggle;  // S key
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|View")
+	TObjectPtr<UInputAction> IA_GridToggle;  // G key
+
+	// ============================================
+	// SELECTION ACTIONS (IMC_2D_Selection / IMC_3D_Selection)
+	// ============================================
+	
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Selection")
+	TObjectPtr<UInputAction> IA_Select;  // LMB
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Selection")
+	TObjectPtr<UInputAction> IA_SelectAdd;  // Shift+LMB (Chord)
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Selection")
+	TObjectPtr<UInputAction> IA_SelectToggle;  // Ctrl+LMB (Chord)
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Selection")
+	TObjectPtr<UInputAction> IA_SelectAll;  // Ctrl+A (Chord)
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Selection")
+	TObjectPtr<UInputAction> IA_DeselectAll;  // Ctrl+D (Chord)
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Selection")
+	TObjectPtr<UInputAction> IA_BoxSelectStart;  // LMB Hold
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Selection")
+	TObjectPtr<UInputAction> IA_BoxSelectDrag;  // Mouse XY during box select
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Selection")
+	TObjectPtr<UInputAction> IA_BoxSelectEnd;  // LMB Released
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Selection")
+	TObjectPtr<UInputAction> IA_CycleSelection;  // Mouse wheel when overlapping
+
+	// ============================================
+	// DRAWING ACTIONS (IMC_2D_LineTool / IMC_2D_PolylineTool)
+	// ============================================
+	
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Drawing")
+	TObjectPtr<UInputAction> IA_DrawPlacePoint;  // LMB - place vertex
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Drawing")
+	TObjectPtr<UInputAction> IA_DrawConfirm;  // Enter - finish polyline
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Drawing")
+	TObjectPtr<UInputAction> IA_DrawCancel;  // Escape / RMB - cancel
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Drawing")
+	TObjectPtr<UInputAction> IA_DrawClose;  // C - close polygon
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Drawing")
+	TObjectPtr<UInputAction> IA_DrawRemoveLastPoint;  // Backspace - undo last vertex
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Drawing")
+	TObjectPtr<UInputAction> IA_OrthoLock;  // Shift held - constrain to axis
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Drawing")
+	TObjectPtr<UInputAction> IA_AngleSnap;  // A - toggle 45° snap
+
+	// ============================================
+	// NUMERIC ENTRY ACTIONS (IMC_NumericEntry)
+	// ============================================
+	
+	// Single digit action with 1D Axis - each key 0-9 uses Scalar modifier
+	// Keys 1-9 output 1.0-9.0, Key 0 outputs 10.0 (special case, maps to 0)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Numeric")
+	TObjectPtr<UInputAction> IA_NumericDigit;  // 1D Axis - receives digit value via Scalar modifier
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Numeric")
+	TObjectPtr<UInputAction> IA_NumericDecimal;  // Period / Numpad Decimal
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Numeric")
+	TObjectPtr<UInputAction> IA_NumericBackspace;  // Backspace
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Numeric")
+	TObjectPtr<UInputAction> IA_NumericCommit;  // Enter / Numpad Enter
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Numeric")
+	TObjectPtr<UInputAction> IA_NumericCancel;  // Escape
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Numeric")
+	TObjectPtr<UInputAction> IA_NumericSwitchField;  // Tab - switch Length/Angle
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Numeric")
+	TObjectPtr<UInputAction> IA_NumericCycleUnits;  // U - cycle units
+
+	// Arithmetic operators
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Numeric|Arithmetic")
+	TObjectPtr<UInputAction> IA_NumericAdd;  // Plus / Numpad Plus
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Numeric|Arithmetic")
+	TObjectPtr<UInputAction> IA_NumericSubtract;  // Minus / Numpad Minus
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Numeric|Arithmetic")
+	TObjectPtr<UInputAction> IA_NumericMultiply;  // Asterisk / Numpad Multiply
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Numeric|Arithmetic")
+	TObjectPtr<UInputAction> IA_NumericDivide;  // Slash / Numpad Divide
+
+	// ============================================
+	// 3D NAVIGATION ACTIONS (IMC_3D_Navigation)
+	// ============================================
+	
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|3DNav")
+	TObjectPtr<UInputAction> IA_ViewTop;  // Numpad 7
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|3DNav")
+	TObjectPtr<UInputAction> IA_ViewFront;  // Numpad 1
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|3DNav")
+	TObjectPtr<UInputAction> IA_ViewRight;  // Numpad 3
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|3DNav")
+	TObjectPtr<UInputAction> IA_ViewPerspective;  // Numpad 5 - toggle ortho/perspective
+
+	// ============================================
+	// TOOL SWITCHING (IMC_Global)
+	// ============================================
+	
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Tools")
+	TObjectPtr<UInputAction> IA_ToolSelect;  // V key
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Tools")
+	TObjectPtr<UInputAction> IA_ToolLine;  // L key
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Tools")
+	TObjectPtr<UInputAction> IA_ToolPolyline;  // P key
 };

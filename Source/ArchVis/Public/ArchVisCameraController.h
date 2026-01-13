@@ -38,6 +38,9 @@ public:
 	void Zoom(float Amount);
 	void Pan(FVector2D Delta);
 	void Orbit(FVector2D Delta);
+	
+	UFUNCTION(BlueprintCallable, Category = "ArchVis|Camera")
+	void ResetView();
 
 protected:
 	virtual void BeginPlay() override;

@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "CommonUserWidget.h"
 #include "RTPlanToolBase.h"
+#include "RTPlanToolManager.h"
 #include "RTPlanToolbar.generated.h"
 
 class URTPlanToolManager;
@@ -21,6 +22,14 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "RTPlan|UI")
 	void SelectTool(TSubclassOf<URTPlanToolBase> ToolClass);
+
+	// Select tool by type enum (easier for Blueprint binding)
+	UFUNCTION(BlueprintCallable, Category = "RTPlan|UI")
+	void SelectToolByType(ERTPlanToolType ToolType);
+
+	// Get current tool type (for highlighting active button)
+	UFUNCTION(BlueprintCallable, Category = "RTPlan|UI")
+	ERTPlanToolType GetActiveToolType() const;
 
 protected:
 	UPROPERTY(BlueprintReadOnly, Category = "RTPlan|UI")

@@ -7,6 +7,7 @@ void FRTPlanSpatialIndex::Build(const URTPlanDocument* Document)
 	SnapSegments.Empty();
 	UniqueX.Empty();
 	UniqueY.Empty();
+	CachedDocument = Document;
 
 	if (!Document) return;
 
@@ -38,8 +39,12 @@ void FRTPlanSpatialIndex::Build(const URTPlanDocument* Document)
 			UniqueX.AddUnique(Mid.X);
 			UniqueY.AddUnique(Mid.Y);
 
-			// Segment
-			SnapSegments.Add({ A, B });
+			// Segment with WallId for hit testing
+			FSnapSegment Seg;
+			Seg.A = A;
+			Seg.B = B;
+			Seg.WallId = Wall.Id;
+			SnapSegments.Add(Seg);
 		}
 	}
 }
@@ -119,3 +124,135 @@ bool FRTPlanSpatialIndex::QueryAlignment(const FVector2D& CursorPos, float Radiu
 
 	return bAligned;
 }
+
+FGuid FRTPlanSpatialIndex::HitTestWall(const FVector2D& Point, float Tolerance) const
+{
+	FGuid BestWallId;
+	float BestDistance = Tolerance;
+
+	for (const FSnapSegment& Seg : SnapSegments)
+	{
+		FVector2D Closest = FRTPlanGeometryUtils::ClosestPointOnSegment(Point, Seg.A, Seg.B);
+		float Dist = FVector2D::Distance(Point, Closest);
+
+		if (Dist < BestDistance)
+		{
+			BestDistance = Dist;
+			BestWallId = Seg.WallId;
+		}
+	}
+
+	return BestWallId;
+}
+
+TArray<FGuid> FRTPlanSpatialIndex::HitTestWallsInRect(const FVector2D& RectMin, const FVector2D& RectMax) const
+{
+	TArray<FGuid> HitWalls;
+
+	for (const FSnapSegment& Seg : SnapSegments)
+	{
+		// Check if either endpoint is inside the rect
+		bool bAInside = (Seg.A.X >= RectMin.X && Seg.A.X <= RectMax.X && 
+		                 Seg.A.Y >= RectMin.Y && Seg.A.Y <= RectMax.Y);
+		bool bBInside = (Seg.B.X >= RectMin.X && Seg.B.X <= RectMax.X && 
+		                 Seg.B.Y >= RectMin.Y && Seg.B.Y <= RectMax.Y);
+
+		if (bAInside || bBInside)
+		{
+			HitWalls.AddUnique(Seg.WallId);
+			continue;
+		}
+
+		// Check if segment intersects any edge of the rectangle
+		// For simplicity, check if the segment crosses any of the 4 rect edges
+		FVector2D RectTL(RectMin.X, RectMax.Y);
+		FVector2D RectBR(RectMax.X, RectMin.Y);
+
+		// Top edge
+		if (FRTPlanGeometryUtils::SegmentsIntersect(Seg.A, Seg.B, RectMin, RectTL) ||
+		    // Left edge
+		    FRTPlanGeometryUtils::SegmentsIntersect(Seg.A, Seg.B, RectTL, RectMax) ||
+		    // Bottom edge
+		    FRTPlanGeometryUtils::SegmentsIntersect(Seg.A, Seg.B, RectMax, RectBR) ||
+		    // Right edge
+		    FRTPlanGeometryUtils::SegmentsIntersect(Seg.A, Seg.B, RectBR, RectMin))
+		{
+			HitWalls.AddUnique(Seg.WallId);
+		}
+	}
+
+	return HitWalls;
+}
+
+FGuid FRTPlanSpatialIndex::HitTestOpening(const FVector2D& Point, float Tolerance) const
+{
+	if (!CachedDocument) return FGuid();
+
+	const FRTPlanData& Data = CachedDocument->GetData();
+	FGuid BestOpeningId;
+	float BestDistance = Tolerance;
+
+	for (const auto& Pair : Data.Openings)
+	{
+		const FRTOpening& Opening = Pair.Value;
+		
+		// Get the wall this opening is on
+		if (!Data.Walls.Contains(Opening.WallId)) continue;
+		const FRTWall& Wall = Data.Walls[Opening.WallId];
+		
+		if (!Data.Vertices.Contains(Wall.VertexAId) || !Data.Vertices.Contains(Wall.VertexBId)) continue;
+		
+		FVector2D WallA = Data.Vertices[Wall.VertexAId].Position;
+		FVector2D WallB = Data.Vertices[Wall.VertexBId].Position;
+		FVector2D WallDir = (WallB - WallA).GetSafeNormal();
+		
+		// Opening center position along the wall (OffsetCm is distance from VertexA)
+		FVector2D OpeningCenter = WallA + WallDir * Opening.OffsetCm;
+		
+		float Dist = FVector2D::Distance(Point, OpeningCenter);
+		if (Dist < BestDistance)
+		{
+			BestDistance = Dist;
+			BestOpeningId = Opening.Id;
+		}
+	}
+
+	return BestOpeningId;
+}
+
+TArray<FGuid> FRTPlanSpatialIndex::HitTestOpeningsInRect(const FVector2D& RectMin, const FVector2D& RectMax) const
+{
+	TArray<FGuid> HitOpenings;
+	
+	if (!CachedDocument) return HitOpenings;
+
+	const FRTPlanData& Data = CachedDocument->GetData();
+
+	for (const auto& Pair : Data.Openings)
+	{
+		const FRTOpening& Opening = Pair.Value;
+		
+		// Get the wall this opening is on
+		if (!Data.Walls.Contains(Opening.WallId)) continue;
+		const FRTWall& Wall = Data.Walls[Opening.WallId];
+		
+		if (!Data.Vertices.Contains(Wall.VertexAId) || !Data.Vertices.Contains(Wall.VertexBId)) continue;
+		
+		FVector2D WallA = Data.Vertices[Wall.VertexAId].Position;
+		FVector2D WallB = Data.Vertices[Wall.VertexBId].Position;
+		FVector2D WallDir = (WallB - WallA).GetSafeNormal();
+		
+		// Opening center position along the wall (OffsetCm is distance from VertexA)
+		FVector2D OpeningCenter = WallA + WallDir * Opening.OffsetCm;
+		
+		// Check if center is inside rect
+		if (OpeningCenter.X >= RectMin.X && OpeningCenter.X <= RectMax.X &&
+		    OpeningCenter.Y >= RectMin.Y && OpeningCenter.Y <= RectMax.Y)
+		{
+			HitOpenings.Add(Opening.Id);
+		}
+	}
+
+	return HitOpenings;
+}
+

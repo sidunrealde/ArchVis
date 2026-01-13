@@ -73,3 +73,10 @@ bool FRTPlanGeometryUtils::SegmentIntersection(const FVector2D& A1, const FVecto
 
 	return false;
 }
+
+bool FRTPlanGeometryUtils::SegmentsIntersect(const FVector2D& A1, const FVector2D& B1, const FVector2D& A2, const FVector2D& B2)
+{
+	FVector2D Unused;
+	return SegmentIntersection(A1, B1, A2, B2, Unused);
+}
+

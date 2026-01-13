@@ -46,7 +46,28 @@ Legend: [x] done, [-] partial, [ ] pending
 - [x] Unit cycling via keyboard action.
 - [x] Real-time preview update while typing numeric values (`UpdatePreviewFromLength`, `UpdatePreviewFromAngle`).
 - [ ] Hook `MouseSensitivity` to a settings source (config / `UGameUserSettings` / settings subsystem).
-- [ ] Create Enhanced Input Action assets in editor for numeric entry (IA_NumericDigit, etc.).
+
+### 1.4 Modular Input Mapping Context System
+- [x] **Hierarchical IMC Architecture:**
+  - IMC_Global (Priority 0 - Always active)
+  - IMC_2D_Base / IMC_3D_Base (Priority 1 - Mode-specific)
+  - IMC_2D_Selection / IMC_2D_LineTool / IMC_2D_PolylineTool (Priority 2 - Tool-specific)
+  - IMC_3D_Selection / IMC_3D_Navigation (Priority 2 - 3D tool contexts)
+  - IMC_NumericEntry (Priority 3 - Layered during numeric input)
+- [x] `UArchVisInputConfig` data asset with all IMC and IA slots defined.
+- [x] `AddMappingContext()` / `RemoveMappingContext()` helpers implemented.
+- [x] `UpdateInputMappingContexts()` for dynamic context switching.
+- [x] `SetInteractionMode()` for 2D/3D mode switching.
+- [x] `OnToolChanged()` callback to update IMC when tool changes.
+- [x] `SwitchTo2DToolMode()` for switching between 2D tools.
+- [x] `ActivateNumericEntryContext()` / `DeactivateNumericEntryContext()` for numeric overlay.
+- [x] Priority constants: `IMC_Priority_Global=0`, `IMC_Priority_ModeBase=1`, `IMC_Priority_Tool=2`, `IMC_Priority_NumericEntry=3`.
+- [x] **Global input handlers implemented:** OnUndo, OnRedo, OnDelete, OnEscape, OnSave.
+- [x] **Modifier key handlers implemented:** OnModifierCtrl/Shift/Alt Started/Completed.
+- [x] **Camera ResetView() function added.**
+- [ ] **Create IMC assets in editor** (see Editor Setup section below).
+- [ ] **Configure key bindings in each IMC asset** (see Editor Setup section below).
+- [ ] **Update DA_ArchVisInput** data asset with all new actions and contexts.
 
 ---
 
@@ -104,12 +125,31 @@ Legend: [x] done, [-] partial, [ ] pending
 
 ## Phase 5: Properties & Editing
 ### 5.1 Selection
-- [ ] Hit test/select walls/rooms (raycast or distance-to-segment).
-- [ ] Selection state + highlighting.
+- [x] Add modifier key fields to FRTPointerEvent (bShiftDown, bAltDown, bCtrlDown).
+- [x] Add IA_SelectionAddModifier and IA_SelectionRemoveModifier to InputConfig.
+- [x] Track modifier key states in PlayerController.
+- [x] Pass modifier states in GetPointerEvent().
+- [x] Add HitTestWall() to SpatialIndex.
+- [x] Add HitTestWallsInRect() to SpatialIndex.
+- [x] Add HitTestOpening() to SpatialIndex.
+- [x] Add HitTestOpeningsInRect() to SpatialIndex.
+- [x] Create RTPlanSelectTool header.
+- [x] Create RTPlanSelectTool implementation.
+- [x] Implement single-click selection.
+- [x] Implement Shift+click add to selection.
+- [x] Implement Alt+click remove from selection.
+- [x] Implement marquee drag selection.
+- [ ] Selection visualization (highlight selected walls in HUD).
+- [ ] Draw marquee rectangle during drag in HUD.
 
 ### 5.2 Property UI
-- [-] `RTPlanUI` widgets exist (toolbar/properties/catalog browser).
-- [ ] Wire UI into runtime (spawn widgets, bind to tool manager/document).
+- [x] `RTPlanUI` widgets exist (toolbar/properties/catalog browser).
+- [x] ERTPlanToolType enum added (None, Select, Line, Polyline).
+- [x] ToolManager SelectToolByType() method added.
+- [x] Toolbar SelectToolByType() and GetActiveToolType() added.
+- [ ] Create WBP_Toolbar widget blueprint with Select/Line/Polyline buttons.
+- [ ] Wire toolbar into runtime (spawn widget, bind to tool manager).
+- [ ] Property panel for selected items.
 
 ### 5.3 Commands for edits
 - [x] Commands: add vertex, add wall, delete wall.
@@ -138,53 +178,318 @@ Legend: [x] done, [-] partial, [ ] pending
 ---
 
 ## Editor Setup Required
-After compiling, create the following Enhanced Input assets in the Unreal Editor:
 
-### Input Actions to Create (in Content/Input/)
-1. `IA_NumericDigit` - Value Type: **Axis1D (Float)**. No modifiers on the action itself.
-2. `IA_NumericDecimal` - Value Type: Digital (Bool). Map to Period key.
-3. `IA_NumericBackspace` - Value Type: Digital (Bool). Map to Backspace key.
-4. `IA_NumericCommit` - Value Type: Digital (Bool). Map to Enter key.
-5. `IA_NumericClear` - Value Type: Digital (Bool). Map to Escape key.
-6. `IA_NumericSwitchField` - Value Type: Digital (Bool). Map to Tab key.
-7. `IA_CycleUnits` - Value Type: Digital (Bool). Map to U key.
-8. `IA_SnapModifier` - Value Type: Digital (Bool). Map to Left Shift key.
+After compiling, create the following Enhanced Input assets in the Unreal Editor.
 
-### Update Input Mapping Context (IMC_ArchVis)
+### STEP 1: Create Input Actions (Content/Input/Actions/)
 
-#### For `IA_NumericDigit` - Add 10 mappings with Scalar modifiers:
+Create each Input Action as a new asset (Right-click → Input → Input Action).
 
-| Key | Scalar X Value |
-|-----|----------------|
-| One | 1.0 |
-| Two | 2.0 |
-| Three | 3.0 |
-| Four | 4.0 |
-| Five | 5.0 |
-| Six | 6.0 |
-| Seven | 7.0 |
-| Eight | 8.0 |
-| Nine | 9.0 |
-| Zero | **10.0** (maps to digit 0 in code) |
+#### Global Actions (Always Available)
+| Asset Name | Value Type | Description |
+|------------|------------|-------------|
+| `IA_ModifierCtrl` | Digital (Bool) | Ctrl key held |
+| `IA_ModifierShift` | Digital (Bool) | Shift key held |
+| `IA_ModifierAlt` | Digital (Bool) | Alt key held |
+| `IA_Undo` | Digital (Bool) | Undo command |
+| `IA_Redo` | Digital (Bool) | Redo command |
+| `IA_Delete` | Digital (Bool) | Delete selection |
+| `IA_Escape` | Digital (Bool) | Cancel/Escape |
+| `IA_ToggleView` | Digital (Bool) | Toggle 2D/3D view |
+| `IA_Save` | Digital (Bool) | Save document |
+| `IA_ToolSelect` | Digital (Bool) | Switch to Select tool |
+| `IA_ToolLine` | Digital (Bool) | Switch to Line tool |
+| `IA_ToolPolyline` | Digital (Bool) | Switch to Polyline tool |
 
-**Why 10.0 for Zero?** Enhanced Input's `Started` trigger requires values > 0 to fire. Using 0.0 for the Zero key causes it to be ignored. The code maps value 10 back to digit 0.
+#### View/Navigation Actions
+| Asset Name | Value Type | Description |
+|------------|------------|-------------|
+| `IA_Pan` | Digital (Bool) | Pan mode toggle (MMB held) |
+| `IA_PanDelta` | Axis2D (Vector2D) | Pan movement delta |
+| `IA_Zoom` | Axis1D (Float) | Zoom in/out |
+| `IA_Orbit` | Digital (Bool) | Orbit mode toggle (3D) |
+| `IA_OrbitDelta` | Axis2D (Vector2D) | Orbit movement delta |
+| `IA_ResetView` | Digital (Bool) | Reset view to default |
+| `IA_FocusSelection` | Digital (Bool) | Focus on selection |
+| `IA_PointerPosition` | Axis2D (Vector2D) | Mouse position tracking |
+| `IA_SnapToggle` | Digital (Bool) | Toggle snap on/off |
+| `IA_GridToggle` | Digital (Bool) | Toggle grid visibility |
 
-#### For other actions:
-| Action | Key |
-|--------|-----|
-| `IA_NumericDecimal` | Period |
-| `IA_NumericBackspace` | Backspace |
-| `IA_NumericCommit` | Enter |
-| `IA_NumericClear` | Escape |
-| `IA_NumericSwitchField` | Tab |
-| `IA_CycleUnits` | U |
-| `IA_SnapModifier` | Left Shift |
+#### Selection Actions
+| Asset Name | Value Type | Description |
+|------------|------------|-------------|
+| `IA_Select` | Digital (Bool) | Select object |
+| `IA_SelectAdd` | Digital (Bool) | Add to selection (Shift+Click) |
+| `IA_SelectToggle` | Digital (Bool) | Toggle selection (Ctrl+Click) |
+| `IA_SelectAll` | Digital (Bool) | Select all |
+| `IA_DeselectAll` | Digital (Bool) | Deselect all |
+| `IA_BoxSelectStart` | Digital (Bool) | Start box selection |
+| `IA_BoxSelectDrag` | Axis2D (Vector2D) | Box selection drag |
+| `IA_BoxSelectEnd` | Digital (Bool) | End box selection |
+| `IA_CycleSelection` | Digital (Bool) | Cycle through overlapping |
 
-### Update Data Asset (DA_ArchVisInput)
-Assign all the new Input Actions to the corresponding slots in the data asset.
+#### Drawing Actions
+| Asset Name | Value Type | Description |
+|------------|------------|-------------|
+| `IA_DrawPlacePoint` | Digital (Bool) | Place vertex |
+| `IA_DrawConfirm` | Digital (Bool) | Finish polyline |
+| `IA_DrawCancel` | Digital (Bool) | Cancel drawing |
+| `IA_DrawClose` | Digital (Bool) | Close polygon |
+| `IA_DrawRemoveLastPoint` | Digital (Bool) | Remove last vertex |
+| `IA_OrthoLock` | Digital (Bool) | Lock to orthogonal |
+| `IA_AngleSnap` | Digital (Bool) | Toggle 45° snap |
+
+#### Numeric Entry Actions
+| Asset Name | Value Type | Description |
+|------------|------------|-------------|
+| `IA_NumericDigit` | **Axis1D (Float)** | Single action for all digits 0-9. Use Scalar modifier on each key binding. |
+| `IA_NumericDecimal` | Digital (Bool) | Decimal point |
+| `IA_NumericBackspace` | Digital (Bool) | Backspace |
+| `IA_NumericCommit` | Digital (Bool) | Commit value (Enter) |
+| `IA_NumericCancel` | Digital (Bool) | Cancel entry |
+| `IA_NumericSwitchField` | Digital (Bool) | Switch Length/Angle (Tab) |
+| `IA_NumericCycleUnits` | Digital (Bool) | Cycle units |
+| `IA_NumericAdd` | Digital (Bool) | Addition operator |
+| `IA_NumericSubtract` | Digital (Bool) | Subtraction operator |
+| `IA_NumericMultiply` | Digital (Bool) | Multiplication operator |
+| `IA_NumericDivide` | Digital (Bool) | Division operator |
+
+#### 3D Navigation Actions
+| Asset Name | Value Type | Description |
+|------------|------------|-------------|
+| `IA_ViewTop` | Digital (Bool) | Top view |
+| `IA_ViewFront` | Digital (Bool) | Front view |
+| `IA_ViewRight` | Digital (Bool) | Right view |
+| `IA_ViewPerspective` | Digital (Bool) | Toggle ortho/perspective |
+
+---
+
+### STEP 2: Create Input Mapping Contexts (Content/Input/)
+
+Create each IMC as a new asset (Right-click → Input → Input Mapping Context).
+
+#### IMC_Global (Priority 0 - Always Active)
+This context is **always** active regardless of mode or tool.
+
+| Action | Key Binding | Modifiers |
+|--------|-------------|-----------|
+| `IA_ModifierCtrl` | Left Ctrl | - |
+| `IA_ModifierShift` | Left Shift | - |
+| `IA_ModifierAlt` | Left Alt | - |
+| `IA_Escape` | Escape | - |
+| `IA_ToggleView` | Tab | - |
+| `IA_Delete` | Delete | - |
+| `IA_Undo` | Z | Chorded Action: `IA_ModifierCtrl` |
+| `IA_Redo` | Y | Chorded Action: `IA_ModifierCtrl` |
+| `IA_Save` | S | Chorded Action: `IA_ModifierCtrl` |
+| `IA_ToolSelect` | V | - |
+| `IA_ToolLine` | L | - |
+| `IA_ToolPolyline` | P | - |
+
+---
+
+#### IMC_2D_Base (Priority 1 - Active in 2D Mode)
+Common 2D drafting controls.
+
+**Note:** Pan uses Chorded Action with `IA_Pan` (MMB held) as the chord. This means `IA_PanDelta` only triggers while MMB is held.
+
+| Action | Key Binding | Modifiers |
+|--------|-------------|-----------|
+| `IA_Pan` | Middle Mouse Button | - |
+| `IA_PanDelta` | Mouse XY 2D-Axis | Chorded Action: `IA_Pan` |
+| `IA_Zoom` | Mouse Wheel Axis | - |
+| `IA_PointerPosition` | Mouse XY 2D-Axis | - |
+| `IA_ResetView` | Home | - |
+| `IA_FocusSelection` | F | - |
+| `IA_SnapToggle` | S | - |
+| `IA_GridToggle` | G | - |
+
+---
+
+#### IMC_3D_Base (Priority 1 - Active in 3D Mode)
+Common 3D navigation controls.
+
+**Note:** Pan and Orbit use Chorded Actions. `IA_PanDelta` only triggers while MMB is held. `IA_OrbitDelta` only triggers while RMB is held.
+
+| Action | Key Binding | Modifiers |
+|--------|-------------|-----------|
+| `IA_Pan` | Middle Mouse Button | - |
+| `IA_PanDelta` | Mouse XY 2D-Axis | Chorded Action: `IA_Pan` |
+| `IA_Zoom` | Mouse Wheel Axis | - |
+| `IA_Orbit` | Right Mouse Button | - |
+| `IA_OrbitDelta` | Mouse XY 2D-Axis | Chorded Action: `IA_Orbit` |
+| `IA_PointerPosition` | Mouse XY 2D-Axis | - |
+| `IA_ResetView` | Home | - |
+| `IA_FocusSelection` | F | - |
+
+---
+
+#### IMC_2D_Selection (Priority 2 - Active when Select Tool in 2D)
+Selection tool controls.
+
+| Action | Key Binding | Modifiers |
+|--------|-------------|-----------|
+| `IA_Select` | Left Mouse Button | - |
+| `IA_SelectAdd` | Left Mouse Button | Chorded Action: `IA_ModifierShift` |
+| `IA_SelectToggle` | Left Mouse Button | Chorded Action: `IA_ModifierCtrl` |
+| `IA_BoxSelectStart` | Left Mouse Button | Hold Time: 0.15s |
+| `IA_BoxSelectDrag` | Mouse XY 2D-Axis | - |
+| `IA_BoxSelectEnd` | Left Mouse Button (Released) | - |
+| `IA_SelectAll` | A | Chorded Action: `IA_ModifierCtrl` |
+| `IA_DeselectAll` | D | Chorded Action: `IA_ModifierCtrl` |
+| `IA_CycleSelection` | Mouse Wheel Axis | - |
+
+---
+
+#### IMC_2D_LineTool (Priority 2 - Active when Line Tool in 2D)
+Line drawing tool controls.
+
+| Action | Key Binding | Modifiers |
+|--------|-------------|-----------|
+| `IA_DrawPlacePoint` | Left Mouse Button | - |
+| `IA_DrawCancel` | Right Mouse Button | - |
+| `IA_DrawCancel` | Escape | - |
+| `IA_OrthoLock` | Left Shift | - |
+| `IA_AngleSnap` | A | - |
+
+---
+
+#### IMC_2D_PolylineTool (Priority 2 - Active when Polyline Tool in 2D)
+Polyline drawing tool controls.
+
+| Action | Key Binding | Modifiers |
+|--------|-------------|-----------|
+| `IA_DrawPlacePoint` | Left Mouse Button | - |
+| `IA_DrawConfirm` | Enter | - |
+| `IA_DrawCancel` | Escape | - |
+| `IA_DrawCancel` | Right Mouse Button | - |
+| `IA_DrawClose` | C | - |
+| `IA_DrawRemoveLastPoint` | Backspace | - |
+| `IA_OrthoLock` | Left Shift | - |
+| `IA_AngleSnap` | A | - |
+
+---
+
+#### IMC_NumericEntry (Priority 3 - Layered During Numeric Input)
+Numeric input controls - layered on top when user starts typing numbers.
+
+**Note:** `IA_NumericDigit` is a **1D Axis** action. Each key uses a **Scalar** modifier to output its digit value (1-9 for digits 1-9, value 10 for digit 0 which maps to 0 in code).
+
+| Action | Key Binding | Modifiers |
+|--------|-------------|-----------|
+| `IA_NumericDigit` | One | Scalar: 1.0 |
+| `IA_NumericDigit` | Numpad One | Scalar: 1.0 |
+| `IA_NumericDigit` | Two | Scalar: 2.0 |
+| `IA_NumericDigit` | Numpad Two | Scalar: 2.0 |
+| `IA_NumericDigit` | Three | Scalar: 3.0 |
+| `IA_NumericDigit` | Numpad Three | Scalar: 3.0 |
+| `IA_NumericDigit` | Four | Scalar: 4.0 |
+| `IA_NumericDigit` | Numpad Four | Scalar: 4.0 |
+| `IA_NumericDigit` | Five | Scalar: 5.0 |
+| `IA_NumericDigit` | Numpad Five | Scalar: 5.0 |
+| `IA_NumericDigit` | Six | Scalar: 6.0 |
+| `IA_NumericDigit` | Numpad Six | Scalar: 6.0 |
+| `IA_NumericDigit` | Seven | Scalar: 7.0 |
+| `IA_NumericDigit` | Numpad Seven | Scalar: 7.0 |
+| `IA_NumericDigit` | Eight | Scalar: 8.0 |
+| `IA_NumericDigit` | Numpad Eight | Scalar: 8.0 |
+| `IA_NumericDigit` | Nine | Scalar: 9.0 |
+| `IA_NumericDigit` | Numpad Nine | Scalar: 9.0 |
+| `IA_NumericDigit` | Zero | Scalar: 10.0 (maps to digit 0) |
+| `IA_NumericDigit` | Numpad Zero | Scalar: 10.0 (maps to digit 0) |
+| `IA_NumericDecimal` | Period | - |
+| `IA_NumericDecimal` | Numpad Decimal | - |
+| `IA_NumericBackspace` | Backspace | - |
+| `IA_NumericCommit` | Enter | - |
+| `IA_NumericCommit` | Numpad Enter | - |
+| `IA_NumericCancel` | Escape | - |
+| `IA_NumericSwitchField` | Tab | - |
+| `IA_NumericCycleUnits` | U | - |
+| `IA_NumericAdd` | Add (Numpad +) | - |
+| `IA_NumericSubtract` | Subtract (Numpad -) | - |
+| `IA_NumericMultiply` | Multiply (Numpad *) | - |
+| `IA_NumericDivide` | Divide (Numpad /) | - |
+
+---
+
+#### IMC_3D_Selection (Priority 2 - Active in 3D for Selection)
+3D selection controls.
+
+| Action | Key Binding | Modifiers |
+|--------|-------------|-----------|
+| `IA_Select` | Left Mouse Button | - |
+| `IA_SelectAdd` | Left Mouse Button | Chorded Action: `IA_ModifierShift` |
+| `IA_SelectToggle` | Left Mouse Button | Chorded Action: `IA_ModifierCtrl` |
+
+---
+
+#### IMC_3D_Navigation (Priority 2 - Active in 3D for View Control)
+3D view navigation controls.
+
+| Action | Key Binding | Modifiers |
+|--------|-------------|-----------|
+| `IA_ViewTop` | Numpad Seven | - |
+| `IA_ViewFront` | Numpad One | - |
+| `IA_ViewRight` | Numpad Three | - |
+| `IA_ViewPerspective` | Numpad Five | - |
+
+---
+
+### STEP 3: Update Data Asset (DA_ArchVisInput)
+
+Open the `DA_ArchVisInput` data asset (or create one based on `UArchVisInputConfig`) and assign:
+
+1. **All Input Mapping Contexts** to their corresponding slots:
+   - `IMC_Global`
+   - `IMC_2D_Base`
+   - `IMC_2D_Selection`
+   - `IMC_2D_LineTool`
+   - `IMC_2D_PolylineTool`
+   - `IMC_NumericEntry`
+   - `IMC_3D_Base`
+   - `IMC_3D_Selection`
+   - `IMC_3D_Navigation`
+
+2. **All Input Actions** to their corresponding slots (organized by category in the data asset).
+
+---
+
+### STEP 4: Configure BP_ArchVisController
+
+In the Blueprint derived from `AArchVisPlayerController`:
+
+| Property | Description |
+|----------|-------------|
+| `InputConfig` | Assign `DA_ArchVisInput` |
+| `MouseSensitivity` | Default: 2.0 (adjust for feel) |
+| `DefaultUnit` | Default unit for numeric input (Centimeters) |
+| `SnapModifierMode` | How snap modifier behaves (HoldToDisable recommended) |
+| `bSnapEnabledByDefault` | Whether snap is on by default (true) |
+
+---
+
+### How the System Works
+
+1. **Priority System**: Higher priority contexts are processed first. If a key is bound in a higher-priority context, it "consumes" the input.
+
+2. **Context Layering**:
+   - `IMC_Global` (0) - Always active
+   - `IMC_2D_Base` or `IMC_3D_Base` (1) - Based on current view mode
+   - Tool-specific IMC (2) - Based on active tool
+   - `IMC_NumericEntry` (3) - Layered on top when typing numbers
+
+3. **Chorded Actions**: For key combinations like Ctrl+Z, bind Z to `IA_Undo` with a "Chorded Action" modifier referencing `IA_ModifierCtrl`.
+
+4. **Numeric Entry Activation**: When user starts typing digits during drawing, `IMC_NumericEntry` is automatically layered on top to capture all numeric input.
+
+5. **Dynamic Switching**: The controller automatically adds/removes contexts when:
+   - Toggling between 2D/3D mode
+   - Switching tools (Select, Line, Polyline)
+   - Starting/ending numeric input
+
+---
 
 ### Snap Modifier Settings (on BP_ArchVisController)
-The snap modifier behavior can be configured via these properties:
 
 | Property | Description |
 |----------|-------------|
