@@ -65,7 +65,8 @@ Legend: [x] done, [-] partial, [ ] pending
 - [x] **Global input handlers implemented:** OnUndo, OnRedo, OnDelete, OnEscape, OnSave.
 - [x] **Modifier key handlers implemented:** OnModifierCtrl/Shift/Alt Started/Completed.
 - [x] **Camera ResetView() function added.**
-- [ ] **Create IMC assets in editor** (see Editor Setup section below).
+- [x] **Create IMC assets in editor** - All IMC assets created in `Content/Input/`.
+- [x] **Create Input Action assets in editor** - All IA assets created in `Content/Input/Actions/`.
 - [ ] **Configure key bindings in each IMC asset** (see Editor Setup section below).
 - [ ] **Update DA_ArchVisInput** data asset with all new actions and contexts.
 
@@ -75,6 +76,9 @@ Legend: [x] done, [-] partial, [ ] pending
 ### 2.1 Line/Polyline tool state machine
 - [x] Click-move-click workflow implemented (`URTPlanLineTool`).
 - [x] Polyline mode toggle exists (`SetPolylineMode`).
+- [x] Polyline close functionality (`ClosePolyline()` - connects to origin).
+- [x] Remove last point in polyline (`RemoveLastPoint()` - deletes wall mesh).
+- [x] Cancel drawing (`CancelDrawing()` - discards current segment).
 
 ### 2.2 Snapping + ortho
 - [x] Hard snapping to endpoints/midpoints.
@@ -85,17 +89,26 @@ Legend: [x] done, [-] partial, [ ] pending
 - [x] Ortho snap threshold configurable (`OrthoSnapThreshold` property).
 - [x] Modifier key to toggle/hold snap on/off (`IA_SnapModifier`).
 - [x] Snap modifier mode setting (Toggle / HoldToDisable / HoldToEnable).
-- [ ] Modifier key to disable ortho snap (Shift/Alt) wiring.
+- [x] Ortho lock (Shift held = force 90° angles only) via `ApplyOrthoLock()`.
+- [x] Angle snap (toggle = snap to 45° increments) via `ApplyAngleSnap()`.
+- [x] `bOrthoLockActive` and `bAngleSnapEnabled` passed via `FRTPointerEvent`.
 
 ### 2.3 Numeric entry hook-up
 - [x] Tool supports numeric input commit (`URTPlanLineTool::OnNumericInput`).
 - [x] Input system feeds numeric values to the tool via `CommitNumericInput()`.
 - [x] Drafting state exposed (`FRTDraftingState`) for HUD visualization.
 - [x] Current length/angle cached and exposed via getters.
+- [x] Angle clamped to 0-180 degrees.
+- [x] Length/angle display with 2 decimal precision.
+- [x] Unit cycling preserves line length (converts display value).
+- [x] Backspace repeat support (hold to delete multiple chars).
+- [x] Backspace delegates to RemoveLastPoint when buffer empty in polyline mode.
 
 ### 2.4 Cancel / finish behaviors
-- [ ] Right click / Esc sends `ERTPointerAction::Cancel` to active tool.
-- [ ] Finish polyline on cancel.
+- [x] Escape / cancel via `OnDrawCancel` → `CancelDrawing()`.
+- [x] Enter to confirm/finish polyline via `OnDrawConfirm`.
+- [x] Close polygon loop via `OnDrawClose` → `ClosePolyline()`.
+- [x] Backspace to remove last point via `RemoveLastPoint()` (deletes wall from document).
 
 ---
 
@@ -496,3 +509,98 @@ In the Blueprint derived from `AArchVisPlayerController`:
 | `SnapModifierMode` | **Toggle**: Press to toggle snap on/off. **HoldToDisable**: Snap on by default, hold to disable. **HoldToEnable**: Snap off by default, hold to enable. |
 | `bSnapEnabledByDefault` | Whether snap is on by default (used with Toggle and HoldToDisable modes) |
 
+---
+
+## Phase 6: Input Action Functionality Implementation
+
+**Status**: 🔄 In Progress  
+**Goal**: Wire all Input Actions to C++ handlers and implement full input functionality.
+
+### 6.1 Global Actions - Wire to PlayerController
+- [x] `IA_ModifierCtrl` → `OnModifierCtrl` (Started/Completed)
+- [x] `IA_ModifierShift` → `OnModifierShift` (Started/Completed)
+- [x] `IA_ModifierAlt` → `OnModifierAlt` (Started/Completed)
+- [x] `IA_Escape` → `OnEscape`
+- [x] `IA_Undo` → `OnUndo` (calls `Document->Undo()`)
+- [x] `IA_Redo` → `OnRedo` (calls `Document->Redo()`)
+- [x] `IA_Delete` → `OnDelete`
+- [x] `IA_Save` → `OnSave`
+- [ ] `IA_ToggleView` → `OnToggleView` (wire to `CameraController->ToggleViewMode()`)
+- [ ] `IA_ToolSelect` → `OnToolSelect` (calls `ToolManager->SelectToolByType(Select)`)
+- [ ] `IA_ToolLine` → `OnToolLine` (calls `ToolManager->SelectToolByType(Line)`)
+- [ ] `IA_ToolPolyLine` → `OnToolPolyline` (calls `ToolManager->SelectToolByType(Polyline)`)
+
+### 6.2 View/Navigation Actions - 2D Mode
+- [ ] `IA_Pan` → `OnPanStarted/OnPanCompleted` (set `bPanning` state)
+- [ ] `IA_PanDelta` → `OnPanDelta` (move camera XY when panning)
+- [ ] `IA_Zoom` → `OnZoom` (adjust ortho width or FOV)
+- [ ] `IA_PointerPosition` → `OnPointerPosition` (update virtual cursor position)
+- [x] `IA_ResetView` → `OnResetView` (reset camera to default)
+- [ ] `IA_FocusSelection` → `OnFocusSelection` (frame selected objects)
+- [ ] `IA_SnapToggle` → `OnSnapToggle` (toggle snap on/off)
+- [ ] `IA_GridToggle` → `OnGridToggle` (toggle grid visibility)
+
+### 6.3 View/Navigation Actions - 3D Mode
+- [ ] `IA_Orbit` → `OnOrbitStarted/OnOrbitCompleted` (set `bOrbiting` state)
+- [ ] `IA_OrbitDelta` → `OnOrbitDelta` (rotate camera around target)
+- [ ] `IA_ViewTop` → `OnViewTop` (set camera to top orthographic view)
+- [ ] `IA_ViewFront` → `OnViewFront` (set camera to front view)
+- [ ] `IA_ViewRight` → `OnViewRight` (set camera to right view)
+- [ ] `IA_ViewPerspective` → `OnViewPerspective` (toggle ortho/perspective)
+
+### 6.4 Selection Actions - Wire to SelectTool
+- [ ] `IA_Select` → `OnSelect` (route LMB to SelectTool)
+- [ ] `IA_SelectAdd` → (handled via Shift modifier state in `FRTPointerEvent`)
+- [ ] `IA_SelectToggle` → (handled via Ctrl modifier state in `FRTPointerEvent`)
+- [ ] `IA_SelectAll` → `OnSelectAll` (select all walls in document)
+- [ ] `IA_DeselectAll` → `OnDeselectAll` (clear selection)
+- [ ] `IA_CycleSelection` → `OnCycleSelection` (cycle through overlapping objects)
+- [ ] `IA_BoxSelectStart` → `OnBoxSelectStart` (begin marquee selection)
+- [ ] `IA_BoxSelectDrag` → `OnBoxSelectDrag` (update marquee rectangle)
+- [ ] `IA_BoxSelectEnd` → `OnBoxSelectEnd` (complete marquee and select)
+
+### 6.5 Drawing Actions - Wire to LineTool/PolylineTool
+- [x] `IA_DrawPlacePoint` → `OnDrawPlacePoint` (route LMB to active drawing tool)
+- [x] `IA_DrawConfirm` → `OnDrawConfirm` (finish polyline with Enter)
+- [x] `IA_DrawCancel` → `OnDrawCancel` (cancel current segment - calls CancelDrawing())
+- [x] `IA_DrawClose` → `OnDrawClose` (close polygon loop - calls ClosePolyline())
+- [x] `IA_DrawRemoveLastPoint` → `OnDrawRemoveLastPoint` (remove last vertex + delete wall mesh)
+- [x] `IA_OrthoLock` → `OnOrthoLock` (hold Shift for 90° angles only)
+- [x] `IA_AngleSnap` → `OnAngleSnap` (toggle 45° angle snap increments)
+
+### 6.6 Numeric Entry Actions
+- [x] `IA_NumericDigit` → `OnNumericDigit` (parse scalar value to digit 0-9)
+- [x] `IA_NumericDecimal` → `OnNumericDecimal` (add decimal point)
+- [x] `IA_NumericBackspace` → `OnNumericBackspace` (remove char / RemoveLastPoint when empty)
+- [x] `IA_NumericCommit` → `OnNumericCommit` (commit value to tool)
+- [x] `IA_NumericCancel` → `OnNumericCancel` (cancel numeric entry, clear buffer)
+- [x] `IA_NumericSwitchField` → `OnNumericSwitchField` (toggle length/angle field)
+- [x] `IA_NumericCycleUnits` → `OnNumericCycleUnits` (cycle cm/m/in/ft - preserves line length)
+- [ ] `IA_NumericAdd/Subtract/Multiply/Divide` → Future calculator functionality
+
+### 6.7 Configure IMC Key Bindings in Editor
+- [x] `IMC_Base` - Add global key bindings (modifiers, Esc, Undo/Redo, tool hotkeys)
+- [x] `IMC_2DBase` - Add 2D navigation bindings (Pan, Zoom, Pointer)
+- [x] `IMC_2DSelection` - Add selection bindings (click, box select, modifiers)
+- [x] `IMC_2DLineTool` - Add line tool bindings (place point, cancel, ortho)
+- [x] `IMC_2DPolylineTool` - Add polyline bindings (confirm, close, remove point)
+- [x] `IMC_3DBase` - Add 3D navigation bindings (orbit, pan, zoom)
+- [x] `IMC_3DSelection` - Add 3D selection bindings
+- [x] `IMC_3DNavigation` - Add numpad view shortcuts
+- [x] `IMC_NumericEntry` - Add all digit keys with Scalar modifiers
+
+### 6.8 Update DA_ArchVisInput Data Asset
+- [x] Assign all IMC references to data asset slots
+- [x] Assign all IA references to data asset slots
+- [x] Set default property values
+
+### 6.9 Integration Testing
+- [x] Test tool switching via hotkeys (V = Select, L = Line, P = Polyline)
+- [x] Test 2D pan/zoom with MMB and scroll wheel
+- [ ] Test selection with LMB, Shift+LMB, Alt+LMB
+- [x] Test line drawing with click-move-click workflow
+- [x] Test polyline with multiple vertices and Enter to confirm
+- [x] Test numeric input during line drawing
+- [ ] Test Undo/Redo with Ctrl+Z/Ctrl+Y
+- [x] Test 2D/3D mode toggle with Tab
+- [x] Test IMC priority layering (numeric entry overrides tool IMC)

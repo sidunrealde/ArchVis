@@ -258,7 +258,8 @@ void AArchVisPlayerController::SetupInputComponent()
 		}
 		if (InputConfig->IA_NumericBackspace)
 		{
-			EIC->BindAction(InputConfig->IA_NumericBackspace, ETriggerEvent::Started, this, &AArchVisPlayerController::OnNumericBackspace);
+			EIC->BindAction(InputConfig->IA_NumericBackspace, ETriggerEvent::Started, this, &AArchVisPlayerController::OnNumericBackspaceStarted);
+			EIC->BindAction(InputConfig->IA_NumericBackspace, ETriggerEvent::Completed, this, &AArchVisPlayerController::OnNumericBackspaceCompleted);
 		}
 		if (InputConfig->IA_NumericCommit)
 		{
@@ -418,6 +419,13 @@ void AArchVisPlayerController::SwitchTo2DToolMode(EArchVis2DToolMode NewToolMode
 	{
 		AddMappingContext(ActiveToolIMC, IMC_Priority_Tool);
 	}
+
+	// For drawing tools (Line/Polyline), enable numeric entry context immediately
+	// so digit keys are available for precision input without needing a bootstrap trigger
+	if (NewToolMode == EArchVis2DToolMode::LineTool || NewToolMode == EArchVis2DToolMode::PolylineTool)
+	{
+		ActivateNumericEntryContext();
+	}
 }
 
 void AArchVisPlayerController::ClearAllToolContexts()
@@ -481,6 +489,40 @@ void AArchVisPlayerController::OnToolChanged(ERTPlanToolType NewToolType)
 void AArchVisPlayerController::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+
+	// Handle backspace key repeat
+	if (bBackspaceHeld)
+	{
+		BackspaceHoldTime += DeltaTime;
+		
+		if (BackspaceHoldTime >= BackspaceNextRepeatTime)
+		{
+			if (!NumericInputBuffer.Buffer.IsEmpty())
+			{
+				// Buffer has content - perform numeric backspace
+				PerformBackspace();
+			}
+			else
+			{
+				// Buffer is empty - delegate to RemoveLastPoint if in polyline mode
+				if (AArchVisGameMode* GM = Cast<AArchVisGameMode>(UGameplayStatics::GetGameMode(this)))
+				{
+					if (URTPlanToolManager* ToolMgr = GM->GetToolManager())
+					{
+						if (URTPlanLineTool* LineTool = Cast<URTPlanLineTool>(ToolMgr->GetActiveTool()))
+						{
+							if (LineTool->IsPolylineMode() && LineTool->IsDrawingActive())
+							{
+								LineTool->RemoveLastPoint();
+							}
+						}
+					}
+				}
+			}
+			// After initial delay, use faster repeat rate
+			BackspaceNextRepeatTime = BackspaceHoldTime + BackspaceRepeatRate;
+		}
+	}
 
 	// Don't send move events when numeric input is active
 	if (NumericInputBuffer.bIsActive && !NumericInputBuffer.Buffer.IsEmpty())
@@ -583,7 +625,8 @@ void AArchVisPlayerController::OnPointerPosition(const FInputActionValue& Value)
 		if (RawDelta.Size() > 1.0f)
 		{
 			NumericInputBuffer.Clear();
-			DeactivateNumericEntryContext();
+			// Don't deactivate numeric entry context for drawing tools
+			// so user can continue entering digits after moving the mouse
 			
 			if (AArchVisGameMode* GM = Cast<AArchVisGameMode>(UGameplayStatics::GetGameMode(this)))
 			{
@@ -720,21 +763,49 @@ void AArchVisPlayerController::OnDrawCancel(const FInputActionValue& Value)
 	{
 		if (URTPlanToolManager* ToolMgr = GM->GetToolManager())
 		{
-			ToolMgr->ProcessInput(GetPointerEvent(ERTPointerAction::Cancel));
+			if (URTPlanLineTool* LineTool = Cast<URTPlanLineTool>(ToolMgr->GetActiveTool()))
+			{
+				LineTool->CancelDrawing();
+				UE_LOG(LogArchVisPC, Log, TEXT("Drawing cancelled"));
+			}
 		}
 	}
 }
 
 void AArchVisPlayerController::OnDrawClose(const FInputActionValue& Value)
 {
-	// TODO: Close polyline (connect last point to first)
-	UE_LOG(LogArchVisPC, Log, TEXT("Close polygon triggered"));
+	if (AArchVisGameMode* GM = Cast<AArchVisGameMode>(UGameplayStatics::GetGameMode(this)))
+	{
+		if (URTPlanToolManager* ToolMgr = GM->GetToolManager())
+		{
+			if (URTPlanLineTool* LineTool = Cast<URTPlanLineTool>(ToolMgr->GetActiveTool()))
+			{
+				if (LineTool->IsPolylineMode())
+				{
+					LineTool->ClosePolyline();
+					UE_LOG(LogArchVisPC, Log, TEXT("Polyline closed"));
+				}
+			}
+		}
+	}
 }
 
 void AArchVisPlayerController::OnDrawRemoveLastPoint(const FInputActionValue& Value)
 {
-	// TODO: Remove last placed vertex in polyline
-	UE_LOG(LogArchVisPC, Log, TEXT("Remove last point triggered"));
+	if (AArchVisGameMode* GM = Cast<AArchVisGameMode>(UGameplayStatics::GetGameMode(this)))
+	{
+		if (URTPlanToolManager* ToolMgr = GM->GetToolManager())
+		{
+			if (URTPlanLineTool* LineTool = Cast<URTPlanLineTool>(ToolMgr->GetActiveTool()))
+			{
+				if (LineTool->IsPolylineMode())
+				{
+					LineTool->RemoveLastPoint();
+					UE_LOG(LogArchVisPC, Log, TEXT("Last point removed"));
+				}
+			}
+		}
+	}
 }
 
 void AArchVisPlayerController::OnOrthoLock(const FInputActionValue& Value)
@@ -749,8 +820,8 @@ void AArchVisPlayerController::OnOrthoLockReleased(const FInputActionValue& Valu
 
 void AArchVisPlayerController::OnAngleSnap(const FInputActionValue& Value)
 {
-	// TODO: Toggle 45-degree angle snapping
-	UE_LOG(LogArchVisPC, Log, TEXT("Angle snap toggled"));
+	bAngleSnapEnabled = !bAngleSnapEnabled;
+	UE_LOG(LogArchVisPC, Log, TEXT("Angle snap toggled: %s"), bAngleSnapEnabled ? TEXT("ON") : TEXT("OFF"));
 }
 
 // ============================================
@@ -802,15 +873,63 @@ void AArchVisPlayerController::OnNumericDecimal(const FInputActionValue& Value)
 	UpdateToolPreviewFromBuffer();
 }
 
-void AArchVisPlayerController::OnNumericBackspace(const FInputActionValue& Value)
+void AArchVisPlayerController::OnNumericBackspaceStarted(const FInputActionValue& Value)
+{
+	// If buffer is empty and we're in a drawing tool, delegate to RemoveLastPoint
+	if (NumericInputBuffer.Buffer.IsEmpty())
+	{
+		if (AArchVisGameMode* GM = Cast<AArchVisGameMode>(UGameplayStatics::GetGameMode(this)))
+		{
+			if (URTPlanToolManager* ToolMgr = GM->GetToolManager())
+			{
+				if (URTPlanLineTool* LineTool = Cast<URTPlanLineTool>(ToolMgr->GetActiveTool()))
+				{
+					if (LineTool->IsPolylineMode() && LineTool->IsDrawingActive())
+					{
+						LineTool->RemoveLastPoint();
+						UE_LOG(LogArchVisPC, Log, TEXT("Backspace -> RemoveLastPoint (buffer empty)"));
+						return;
+					}
+				}
+			}
+		}
+	}
+	
+	bBackspaceHeld = true;
+	BackspaceHoldTime = 0.0f;
+	BackspaceNextRepeatTime = BackspaceRepeatDelay;
+	
+	// Perform immediate backspace on key press
+	PerformBackspace();
+}
+
+void AArchVisPlayerController::OnNumericBackspaceCompleted(const FInputActionValue& Value)
+{
+	bBackspaceHeld = false;
+	BackspaceHoldTime = 0.0f;
+}
+
+void AArchVisPlayerController::PerformBackspace()
 {
 	NumericInputBuffer.Backspace();
 	UE_LOG(LogArchVisPC, Log, TEXT("Backspace, Buffer: %s"), *NumericInputBuffer.Buffer);
 	
-	// Deactivate if buffer is empty
+	// If buffer is empty, clear the tool's numeric override but keep numeric context active
+	// for drawing tools so user can continue entering digits
 	if (NumericInputBuffer.Buffer.IsEmpty())
 	{
-		DeactivateNumericEntryContext();
+		// Clear tool's numeric preview
+		if (AArchVisGameMode* GM = Cast<AArchVisGameMode>(UGameplayStatics::GetGameMode(this)))
+		{
+			if (URTPlanToolManager* ToolMgr = GM->GetToolManager())
+			{
+				if (URTPlanLineTool* LineTool = Cast<URTPlanLineTool>(ToolMgr->GetActiveTool()))
+				{
+					LineTool->ClearNumericInputOverride();
+				}
+			}
+		}
+		// Keep numeric context active for drawing tools - don't deactivate
 	}
 	else
 	{
@@ -866,14 +985,47 @@ void AArchVisPlayerController::OnNumericSwitchField(const FInputActionValue& Val
 
 void AArchVisPlayerController::OnNumericCycleUnits(const FInputActionValue& Value)
 {
-	NumericInputBuffer.CycleUnit();
-	UE_LOG(LogArchVisPC, Log, TEXT("Cycled to unit: %s"), *UEnum::GetValueAsString(NumericInputBuffer.CurrentUnit));
-	
-	// Update preview with new unit conversion
-	if (!NumericInputBuffer.Buffer.IsEmpty())
+	// Only apply unit conversion to length field, not angle
+	if (NumericInputBuffer.ActiveField != ERTNumericField::Length)
 	{
-		UpdateToolPreviewFromBuffer();
+		// For angle, just cycle the unit (no conversion needed)
+		NumericInputBuffer.CycleUnit();
+		UE_LOG(LogArchVisPC, Log, TEXT("Cycled to unit: %s"), *UEnum::GetValueAsString(NumericInputBuffer.CurrentUnit));
+		return;
 	}
+	
+	// Get the current value in cm before cycling
+	float ValueInCm = NumericInputBuffer.GetValueInCm();
+	
+	// Cycle to the next unit
+	NumericInputBuffer.CycleUnit();
+	
+	// Convert the cm value to the new unit and update the buffer
+	// This keeps the line length the same but shows the equivalent value in the new unit
+	if (!NumericInputBuffer.Buffer.IsEmpty() && ValueInCm > 0.0f)
+	{
+		float NewDisplayValue = NumericInputBuffer.GetDisplayValue(ValueInCm);
+		NumericInputBuffer.Buffer = FString::Printf(TEXT("%.2f"), NewDisplayValue);
+		
+		// Remove trailing zeros for cleaner display
+		NumericInputBuffer.Buffer.TrimEndInline();
+		if (NumericInputBuffer.Buffer.Contains(TEXT(".")))
+		{
+			while (NumericInputBuffer.Buffer.EndsWith(TEXT("0")))
+			{
+				NumericInputBuffer.Buffer.LeftChopInline(1);
+			}
+			if (NumericInputBuffer.Buffer.EndsWith(TEXT(".")))
+			{
+				NumericInputBuffer.Buffer.LeftChopInline(1);
+			}
+		}
+	}
+	
+	UE_LOG(LogArchVisPC, Log, TEXT("Cycled to unit: %s, Buffer: %s"), 
+		*UEnum::GetValueAsString(NumericInputBuffer.CurrentUnit), *NumericInputBuffer.Buffer);
+	
+	// Don't call UpdateToolPreviewFromBuffer() - the line length stays the same
 }
 
 void AArchVisPlayerController::OnNumericAdd(const FInputActionValue& Value)
@@ -993,6 +1145,8 @@ void AArchVisPlayerController::UpdateToolPreviewFromBuffer()
 				}
 				else
 				{
+					// Clamp angle to 0-180 degrees
+					Value = FMath::Clamp(Value, 0.0f, 180.0f);
 					LineTool->UpdatePreviewFromAngle(Value);
 				}
 			}
@@ -1005,6 +1159,12 @@ void AArchVisPlayerController::CommitNumericInput()
 	if (NumericInputBuffer.Buffer.IsEmpty()) return;
 	
 	float Value = NumericInputBuffer.GetValueInCm();
+	
+	// Clamp angle to 0-180 degrees
+	if (NumericInputBuffer.ActiveField == ERTNumericField::Angle)
+	{
+		Value = FMath::Clamp(Value, 0.0f, 180.0f);
+	}
 	
 	if (AArchVisGameMode* GM = Cast<AArchVisGameMode>(UGameplayStatics::GetGameMode(this)))
 	{
@@ -1030,6 +1190,8 @@ FRTPointerEvent AArchVisPlayerController::GetPointerEvent(ERTPointerAction Actio
 	Event.bShiftDown = bShiftDown;
 	Event.bAltDown = bAltDown;
 	Event.bCtrlDown = bCtrlDown;
+	Event.bOrthoLockActive = bOrthoLockActive;
+	Event.bAngleSnapEnabled = bAngleSnapEnabled;
 
 	FVector WorldLoc, WorldDir;
 	if (DeprojectScreenPositionToWorld(VirtualCursorPos.X, VirtualCursorPos.Y, WorldLoc, WorldDir))

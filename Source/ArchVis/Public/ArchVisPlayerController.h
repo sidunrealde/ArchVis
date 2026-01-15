@@ -178,7 +178,8 @@ protected:
 	void OnNumericDigit(int32 Digit);
 	void OnNumericDigitInput(const FInputActionValue& Value);  // Single handler for 1D Axis digit input
 	void OnNumericDecimal(const FInputActionValue& Value);
-	void OnNumericBackspace(const FInputActionValue& Value);
+	void OnNumericBackspaceStarted(const FInputActionValue& Value);
+	void OnNumericBackspaceCompleted(const FInputActionValue& Value);
 	void OnNumericCommit(const FInputActionValue& Value);
 	void OnNumericCancel(const FInputActionValue& Value);
 	void OnNumericSwitchField(const FInputActionValue& Value);
@@ -187,6 +188,9 @@ protected:
 	void OnNumericSubtract(const FInputActionValue& Value);
 	void OnNumericMultiply(const FInputActionValue& Value);
 	void OnNumericDivide(const FInputActionValue& Value);
+	
+	// Perform one backspace operation
+	void PerformBackspace();
 
 	// --- 3D Navigation Handlers ---
 	void OnViewTop(const FInputActionValue& Value);
@@ -238,11 +242,19 @@ protected:
 	bool bAltDown = false;
 	bool bCtrlDown = false;
 	bool bOrthoLockActive = false;
+	bool bAngleSnapEnabled = false;
 
 	// Snap state
 	bool bSnapToggledOn = true;
 	bool bSnapModifierHeld = false;
 	bool bGridVisible = true;
+
+	// Backspace repeat state
+	bool bBackspaceHeld = false;
+	float BackspaceHoldTime = 0.0f;
+	float BackspaceRepeatDelay = 0.4f;  // Initial delay before repeat starts
+	float BackspaceRepeatRate = 0.05f;  // Time between repeats
+	float BackspaceNextRepeatTime = 0.0f;
 
 	// Current states
 	EArchVisInteractionMode CurrentInteractionMode = EArchVisInteractionMode::Drafting2D;

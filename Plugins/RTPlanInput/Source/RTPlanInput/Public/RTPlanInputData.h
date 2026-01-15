@@ -484,6 +484,14 @@ struct RTPLANINPUT_API FRTPointerEvent
 	UPROPERTY(BlueprintReadWrite, EditAnywhere)
 	bool bCtrlDown = false;
 
+	// Ortho lock is active (force 90° angles only)
+	UPROPERTY(BlueprintReadWrite, EditAnywhere)
+	bool bOrthoLockActive = false;
+
+	// Angle snap is enabled (snap to 45° increments)
+	UPROPERTY(BlueprintReadWrite, EditAnywhere)
+	bool bAngleSnapEnabled = false;
+
 	// Helper to get a point along the ray
 	FVector GetPointAtDistance(float Distance) const
 	{

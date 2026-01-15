@@ -8,15 +8,24 @@ void URTPlanLineTool::OnEnter()
 	State = EState::WaitingForStart;
 	bShowPreview = false;
 	bIsOrthoSnapped = false;
+	bIsAngleSnapped = false;
 	CachedLengthCm = 0.0f;
 	CachedAngleDegrees = 0.0f;
-	UE_LOG(LogRTPlanLineTool, Log, TEXT("Line Tool Activated"));
+	PolylineOriginPoint = FVector2D::ZeroVector;
+	PlacedVertexIds.Empty();
+	PlacedWallIds.Empty();
+	PlacedVertexPositions.Empty();
+	UE_LOG(LogRTPlanLineTool, Log, TEXT("Line Tool Activated (Polyline: %s)"), bIsPolyline ? TEXT("Yes") : TEXT("No"));
 }
 
 void URTPlanLineTool::OnExit()
 {
 	bShowPreview = false;
 	bIsOrthoSnapped = false;
+	bIsAngleSnapped = false;
+	PlacedVertexIds.Empty();
+	PlacedWallIds.Empty();
+	PlacedVertexPositions.Empty();
 	UE_LOG(LogRTPlanLineTool, Log, TEXT("Line Tool Deactivated"));
 }
 
@@ -189,6 +198,89 @@ FVector2D URTPlanLineTool::ApplySoftOrthoSnap(const FVector2D& Start, const FVec
 	return End;
 }
 
+FVector2D URTPlanLineTool::ApplyOrthoLock(const FVector2D& Start, const FVector2D& End)
+{
+	FVector2D Delta = End - Start;
+	float Length = Delta.Size();
+	
+	if (Length < 0.1f)
+	{
+		bIsOrthoSnapped = true;
+		return End;
+	}
+	
+	// Calculate angle in degrees
+	float AngleDeg = FMath::RadiansToDegrees(FMath::Atan2(Delta.Y, Delta.X));
+	
+	// Normalize to 0-360
+	if (AngleDeg < 0.0f)
+	{
+		AngleDeg += 360.0f;
+	}
+	
+	// Find nearest cardinal direction (0, 90, 180, 270)
+	const float CardinalAngles[] = { 0.0f, 90.0f, 180.0f, 270.0f };
+	float NearestCardinal = 0.0f;
+	float MinDiff = 360.0f;
+	
+	for (float Cardinal : CardinalAngles)
+	{
+		float Diff = FMath::Abs(AngleDeg - Cardinal);
+		if (Diff > 180.0f) Diff = 360.0f - Diff;
+		if (Diff < MinDiff)
+		{
+			MinDiff = Diff;
+			NearestCardinal = Cardinal;
+		}
+	}
+	
+	// Also check 360 (same as 0)
+	float DiffTo360 = FMath::Abs(AngleDeg - 360.0f);
+	if (DiffTo360 < MinDiff)
+	{
+		NearestCardinal = 0.0f;
+	}
+	
+	// Snap to nearest cardinal direction
+	float SnapAngleRad = FMath::DegreesToRadians(NearestCardinal);
+	FVector2D SnapDir(FMath::Cos(SnapAngleRad), FMath::Sin(SnapAngleRad));
+	bIsOrthoSnapped = true;
+	return Start + SnapDir * Length;
+}
+
+FVector2D URTPlanLineTool::ApplyAngleSnap(const FVector2D& Start, const FVector2D& End)
+{
+	FVector2D Delta = End - Start;
+	float Length = Delta.Size();
+	
+	if (Length < 0.1f)
+	{
+		bIsAngleSnapped = false;
+		return End;
+	}
+	
+	// Calculate angle in degrees
+	float AngleDeg = FMath::RadiansToDegrees(FMath::Atan2(Delta.Y, Delta.X));
+	
+	// Normalize to 0-360
+	if (AngleDeg < 0.0f)
+	{
+		AngleDeg += 360.0f;
+	}
+	
+	// Round to nearest angle increment
+	float SnappedAngle = FMath::RoundToFloat(AngleDeg / AngleSnapIncrement) * AngleSnapIncrement;
+	
+	// Normalize back to 0-360
+	if (SnappedAngle >= 360.0f) SnappedAngle = 0.0f;
+	if (SnappedAngle < 0.0f) SnappedAngle += 360.0f;
+	
+	float SnapAngleRad = FMath::DegreesToRadians(SnappedAngle);
+	FVector2D SnapDir(FMath::Cos(SnapAngleRad), FMath::Sin(SnapAngleRad));
+	bIsAngleSnapped = true;
+	return Start + SnapDir * Length;
+}
+
 void URTPlanLineTool::OnPointerEvent(const FRTPointerEvent& Event)
 {
 	FVector GroundPoint;
@@ -226,10 +318,12 @@ void URTPlanLineTool::OnPointerEvent(const FRTPointerEvent& Event)
 		CurrentEndPoint = SnappedPos;
 		LastSnappedWorldPos = FVector(CurrentEndPoint.X, CurrentEndPoint.Y, 0);
 		bIsOrthoSnapped = false;
+		bIsAngleSnapped = false;
 
 		if (Event.Action == ERTPointerAction::Down)
 		{
 			StartPoint = SnappedPos;
+			PolylineOriginPoint = StartPoint; // Save origin for closing polyline
 			State = EState::WaitingForEnd;
 			bShowPreview = true;
 			UE_LOG(LogRTPlanLineTool, Log, TEXT("Start Point Set: %s"), *StartPoint.ToString());
@@ -246,17 +340,26 @@ void URTPlanLineTool::OnPointerEvent(const FRTPointerEvent& Event)
 		// Only update position from mouse if numeric input is not active
 		if (!bNumericInputActive)
 		{
-			// 3. Apply Soft Ortho Snap only if snap is enabled
-			FVector2D FinalEndPoint;
-			if (Event.bSnapEnabled)
+			// Apply angle constraints based on modifier keys
+			FVector2D FinalEndPoint = SnappedPos;
+			bIsOrthoSnapped = false;
+			bIsAngleSnapped = false;
+			
+			// Priority: OrthoLock > AngleSnap > SoftOrthoSnap
+			if (Event.bOrthoLockActive)
 			{
-				FinalEndPoint = ApplySoftOrthoSnap(StartPoint, SnappedPos);
+				// Force 90° angles only (Shift held)
+				FinalEndPoint = ApplyOrthoLock(StartPoint, SnappedPos);
 			}
-			else
+			else if (Event.bAngleSnapEnabled)
 			{
-				// No snapping - use raw position
-				FinalEndPoint = SnappedPos;
-				bIsOrthoSnapped = false;
+				// Snap to 45° increments
+				FinalEndPoint = ApplyAngleSnap(StartPoint, SnappedPos);
+			}
+			else if (Event.bSnapEnabled)
+			{
+				// Soft ortho snap (near 90° angles)
+				FinalEndPoint = ApplySoftOrthoSnap(StartPoint, SnappedPos);
 			}
 			
 			CurrentEndPoint = FinalEndPoint;
@@ -273,27 +376,7 @@ void URTPlanLineTool::OnPointerEvent(const FRTPointerEvent& Event)
 			
 			if (!StartPoint.Equals(CurrentEndPoint, 0.1f))
 			{
-				UE_LOG(LogRTPlanLineTool, Log, TEXT("End Point Set: %s (Length: %.1f, Angle: %.1f°). Committing Wall."), 
-					*CurrentEndPoint.ToString(), CachedLengthCm, CachedAngleDegrees);
-
-				FRTVertex V1; V1.Id = FGuid::NewGuid(); V1.Position = StartPoint;
-				FRTVertex V2; V2.Id = FGuid::NewGuid(); V2.Position = CurrentEndPoint;
-				FRTWall NewWall; NewWall.Id = FGuid::NewGuid(); NewWall.VertexAId = V1.Id; NewWall.VertexBId = V2.Id;
-				NewWall.ThicknessCm = 20.0f; NewWall.HeightCm = 300.0f;
-
-				URTCmdAddVertex* CmdV1 = NewObject<URTCmdAddVertex>(); CmdV1->Vertex = V1; Document->SubmitCommand(CmdV1);
-				URTCmdAddVertex* CmdV2 = NewObject<URTCmdAddVertex>(); CmdV2->Vertex = V2; Document->SubmitCommand(CmdV2);
-				URTCmdAddWall* CmdWall = NewObject<URTCmdAddWall>(); CmdWall->Wall = NewWall; Document->SubmitCommand(CmdWall);
-
-				if (bIsPolyline)
-				{
-					StartPoint = CurrentEndPoint;
-				}
-				else
-				{
-					State = EState::WaitingForStart;
-					bShowPreview = false;
-				}
+				CommitWallSegment(bIsPolyline);
 			}
 		}
 	}
@@ -362,7 +445,20 @@ void URTPlanLineTool::OnNumericInputWithField(float Value, ERTNumericField Field
 	LastSnappedWorldPos = FVector(CurrentEndPoint.X, CurrentEndPoint.Y, 0);
 	UpdateCachedValues();
 	
-	// Commit the wall
+	// Commit the wall using helper
+	CommitWallSegment(bIsPolyline);
+}
+
+void URTPlanLineTool::CommitWallSegment(bool bContinuePolyline)
+{
+	if (StartPoint.Equals(CurrentEndPoint, 0.1f))
+	{
+		return;
+	}
+
+	UE_LOG(LogRTPlanLineTool, Log, TEXT("Committing Wall: %s -> %s (Length: %.1f, Angle: %.1f°)"), 
+		*StartPoint.ToString(), *CurrentEndPoint.ToString(), CachedLengthCm, CachedAngleDegrees);
+
 	FRTVertex V1; V1.Id = FGuid::NewGuid(); V1.Position = StartPoint;
 	FRTVertex V2; V2.Id = FGuid::NewGuid(); V2.Position = CurrentEndPoint;
 	FRTWall NewWall; NewWall.Id = FGuid::NewGuid(); NewWall.VertexAId = V1.Id; NewWall.VertexBId = V2.Id;
@@ -372,7 +468,16 @@ void URTPlanLineTool::OnNumericInputWithField(float Value, ERTNumericField Field
 	URTCmdAddVertex* CmdV2 = NewObject<URTCmdAddVertex>(); CmdV2->Vertex = V2; Document->SubmitCommand(CmdV2);
 	URTCmdAddWall* CmdWall = NewObject<URTCmdAddWall>(); CmdWall->Wall = NewWall; Document->SubmitCommand(CmdWall);
 
-	if (bIsPolyline)
+	// Track placed elements for undo
+	PlacedVertexIds.Add(V1.Id);
+	PlacedVertexIds.Add(V2.Id);
+	PlacedWallIds.Add(NewWall.Id);
+	
+	// Track positions for RemoveLastPoint
+	PlacedVertexPositions.Add(StartPoint);
+	PlacedVertexPositions.Add(CurrentEndPoint);
+
+	if (bContinuePolyline)
 	{
 		StartPoint = CurrentEndPoint;
 	}
@@ -380,6 +485,118 @@ void URTPlanLineTool::OnNumericInputWithField(float Value, ERTNumericField Field
 	{
 		State = EState::WaitingForStart;
 		bShowPreview = false;
+		PlacedVertexIds.Empty();
+		PlacedWallIds.Empty();
+		PlacedVertexPositions.Empty();
 	}
 }
 
+void URTPlanLineTool::CancelDrawing()
+{
+	if (State == EState::WaitingForEnd)
+	{
+		UE_LOG(LogRTPlanLineTool, Log, TEXT("Drawing cancelled"));
+		
+		// Reset state without committing
+		State = EState::WaitingForStart;
+		bShowPreview = false;
+		bNumericInputActive = false;
+		PlacedVertexIds.Empty();
+		PlacedWallIds.Empty();
+		PlacedVertexPositions.Empty();
+		CachedLengthCm = 0.0f;
+		CachedAngleDegrees = 0.0f;
+	}
+}
+
+void URTPlanLineTool::ClosePolyline()
+{
+	if (!bIsPolyline || State != EState::WaitingForEnd)
+	{
+		return;
+	}
+
+	// Check if we have enough points to close (at least one wall segment placed)
+	if (PlacedWallIds.Num() == 0)
+	{
+		UE_LOG(LogRTPlanLineTool, Warning, TEXT("Cannot close polyline: no segments placed"));
+		return;
+	}
+
+	// Check if closing would create a valid segment
+	if (StartPoint.Equals(PolylineOriginPoint, 0.1f))
+	{
+		UE_LOG(LogRTPlanLineTool, Warning, TEXT("Cannot close polyline: already at origin"));
+		return;
+	}
+
+	UE_LOG(LogRTPlanLineTool, Log, TEXT("Closing polyline: %s -> %s"), *StartPoint.ToString(), *PolylineOriginPoint.ToString());
+
+	// Commit final wall segment to origin
+	CurrentEndPoint = PolylineOriginPoint;
+	UpdateCachedValues();
+	CommitWallSegment(false); // Don't continue - we're closing
+
+	// Reset for new drawing
+	State = EState::WaitingForStart;
+	bShowPreview = false;
+	bNumericInputActive = false;
+	PlacedVertexIds.Empty();
+	PlacedWallIds.Empty();
+	PlacedVertexPositions.Empty();
+}
+
+void URTPlanLineTool::RemoveLastPoint()
+{
+	if (!bIsPolyline || State != EState::WaitingForEnd)
+	{
+		return;
+	}
+
+	// If we have placed walls, undo the last one
+	if (PlacedWallIds.Num() > 0 && PlacedVertexPositions.Num() >= 2)
+	{
+		// Get the last wall ID before removing from tracking
+		FGuid LastWallId = PlacedWallIds.Pop();
+		
+		// Remove the wall from the document
+		if (Document)
+		{
+			URTCmdDeleteWall* CmdDeleteWall = NewObject<URTCmdDeleteWall>();
+			CmdDeleteWall->WallId = LastWallId;
+			Document->SubmitCommand(CmdDeleteWall);
+		}
+		
+		// Remove the last two vertex IDs (start and end of last segment)
+		PlacedVertexIds.Pop();
+		PlacedVertexIds.Pop();
+		
+		// Remove the last two positions
+		PlacedVertexPositions.Pop(); // End position
+		PlacedVertexPositions.Pop(); // Start position
+		
+		UE_LOG(LogRTPlanLineTool, Log, TEXT("Removed wall %s. Walls remaining: %d"), *LastWallId.ToString(), PlacedWallIds.Num());
+
+		// Move start point back to the previous end position
+		if (PlacedVertexPositions.Num() >= 1)
+		{
+			// Go back to the last placed end position
+			StartPoint = PlacedVertexPositions.Last();
+			UE_LOG(LogRTPlanLineTool, Log, TEXT("Start point moved back to: %s"), *StartPoint.ToString());
+		}
+		else
+		{
+			// No more positions - go back to origin
+			StartPoint = PolylineOriginPoint;
+			UE_LOG(LogRTPlanLineTool, Log, TEXT("Back to origin point: %s"), *StartPoint.ToString());
+		}
+		
+		// Update cached values for the new segment preview
+		UpdateCachedValues();
+	}
+	else
+	{
+		// No walls placed yet - just cancel the current segment
+		CancelDrawing();
+	}
+}

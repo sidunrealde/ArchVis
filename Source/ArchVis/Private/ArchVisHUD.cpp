@@ -176,7 +176,7 @@ void AArchVisHUD::DrawDraftingVisualization(const FRTDraftingState& DraftState, 
 	else
 	{
 		// Show calculated length with units
-		LengthText = FString::Printf(TEXT("%.0f %s"), DisplayLength, *InputBuffer.GetUnitSuffix());
+		LengthText = FString::Printf(TEXT("%.2f %s"), DisplayLength, *InputBuffer.GetUnitSuffix());
 	}
 
 	// Use active color if length field is active, otherwise inactive
@@ -212,7 +212,7 @@ void AArchVisHUD::DrawDraftingVisualization(const FRTDraftingState& DraftState, 
 	else
 	{
 		// Show calculated angle (0-180 from horizontal)
-		AngleText = FString::Printf(TEXT("%.0f\u00B0"), DisplayAngle);
+		AngleText = FString::Printf(TEXT("%.2f\u00B0"), DisplayAngle);
 	}
 
 	// Use active color if angle field is active, otherwise inactive
