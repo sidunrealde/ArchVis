@@ -4,7 +4,6 @@
 #include "Input/OrbitInputComponent.h"
 #include "ArchVisOrbitPawn.h"
 #include "ArchVisInputConfig.h"
-#include "EnhancedInputSubsystems.h"
 #include "GameFramework/PlayerController.h"
 #include "Engine/GameViewportClient.h"
 #include "Engine/World.h"
@@ -39,14 +38,21 @@ void UOrbitInputComponent::TickComponent(float DeltaTime, ELevelTick TickType, F
 	// Process mouse-based navigation
 	ProcessMouseNavigation(DeltaTime);
 
-	// Process WASD movement during fly mode
+	// Process WASD movement during fly mode (RMB held)
 	ENavMode NavMode = GetCurrentNavMode();
-	if (NavMode == ENavMode::Look && (!MoveInput.IsNearlyZero() || !FMath::IsNearlyZero(VerticalInput)))
+	if (AArchVisOrbitPawn* Pawn = GetOrbitPawn())
 	{
-		if (AArchVisOrbitPawn* Pawn = GetOrbitPawn())
+		if (NavMode == ENavMode::Look)
 		{
+			// In fly mode - apply movement input
 			Pawn->SetMovementInput(MoveInput);
 			Pawn->SetVerticalInput(VerticalInput);
+		}
+		else
+		{
+			// Not in fly mode - clear movement input
+			Pawn->SetMovementInput(FVector2D::ZeroVector);
+			Pawn->SetVerticalInput(0.0f);
 		}
 	}
 }
@@ -114,6 +120,13 @@ void UOrbitInputComponent::SetupInputBindings()
 	if (InputConfig->IA_Zoom)
 	{
 		BindAction(InputConfig->IA_Zoom, ETriggerEvent::Triggered, this, &UOrbitInputComponent::OnZoom);
+	}
+
+	// --- Adjust Fly Speed (RMB + Scroll) ---
+	
+	if (InputConfig->IA_AdjustFlySpeed)
+	{
+		BindAction(InputConfig->IA_AdjustFlySpeed, ETriggerEvent::Triggered, this, &UOrbitInputComponent::OnAdjustFlySpeed);
 	}
 
 	// --- WASD Movement ---
@@ -446,9 +459,38 @@ void UOrbitInputComponent::OnZoom(const FInputActionValue& Value)
 	}
 }
 
+void UOrbitInputComponent::OnAdjustFlySpeed(const FInputActionValue& Value)
+{
+	const float ScrollAmount = Value.Get<float>();
+	
+	if (FMath::IsNearlyZero(ScrollAmount))
+	{
+		return;
+	}
+
+	if (AArchVisOrbitPawn* Pawn = GetOrbitPawn())
+	{
+		Pawn->AdjustFlySpeed(ScrollAmount);
+
+		if (bDebugEnabled)
+		{
+			UE_LOG(LogOrbitInput, Log, TEXT("IA_AdjustFlySpeed: %f -> FlySpeed=%f"), ScrollAmount, Pawn->GetFlySpeed());
+		}
+	}
+}
+
 void UOrbitInputComponent::OnMove(const FInputActionValue& Value)
 {
-	MoveInput = Value.Get<FVector2D>();
+	// IA_Move is configured as an Axis2D (Vector2D) action.
+	// Expected convention:
+	//   MoveInput.X = Right/Left (D=+, A=-)
+	//   MoveInput.Y = Forward/Back (W=+, S=-)
+	//
+	// Input Action provides:
+	//   RawInput.X = A/D (left/right)
+	//   RawInput.Y = W/S (forward/back)
+	const FVector2D RawInput = Value.Get<FVector2D>();
+	MoveInput = RawInput;  // Use directly - X=left/right, Y=forward/back
 }
 
 void UOrbitInputComponent::OnMoveUp(const FInputActionValue& Value)

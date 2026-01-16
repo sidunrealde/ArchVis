@@ -63,6 +63,9 @@ protected:
 	// Zoom
 	void OnZoom(const FInputActionValue& Value);
 
+	// Adjust fly speed (RMB + Scroll)
+	void OnAdjustFlySpeed(const FInputActionValue& Value);
+
 	// WASD Movement (during fly mode)
 	void OnMove(const FInputActionValue& Value);
 	void OnMoveUp(const FInputActionValue& Value);

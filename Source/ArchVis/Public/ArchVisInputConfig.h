@@ -153,6 +153,9 @@ public:
 	TObjectPtr<UInputAction> IA_FlyMode;  // Fly mode - enables WASD movement and mouselook
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|View")
+	TObjectPtr<UInputAction> IA_AdjustFlySpeed;  // Adjust fly speed (RMB + Scroll)
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|View")
 	TObjectPtr<UInputAction> IA_ResetView;  // Reset camera to default
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|View")

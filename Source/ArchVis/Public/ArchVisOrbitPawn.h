@@ -75,6 +75,13 @@ public:
 
 	void SetSpeedBoost(bool bBoost) { bSpeedBoost = bBoost; }
 
+	// Adjust fly speed (e.g., with scroll wheel while RMB held)
+	UFUNCTION(BlueprintCallable, Category = "ArchVis|Movement")
+	void AdjustFlySpeed(float Delta);
+
+	UFUNCTION(BlueprintCallable, Category = "ArchVis|Movement")
+	float GetFlySpeed() const { return FlySpeed; }
+
 	// Debug
 	UFUNCTION(BlueprintCallable, Category = "ArchVis|Debug")
 	void SetDebugEnabled(bool bEnabled) { bDebugEnabled = bEnabled; }
@@ -125,6 +132,15 @@ protected:
 	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
 	float FlySpeed = 1000.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
+	float MinFlySpeed = 100.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
+	float MaxFlySpeed = 10000.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
+	float FlySpeedAdjustMultiplier = 1.2f;  // Multiply/divide speed by this amount per scroll tick
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
 	float FastFlyMultiplier = 3.0f;

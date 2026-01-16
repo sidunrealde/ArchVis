@@ -262,6 +262,27 @@ void AArchVisOrbitPawn::SetVerticalInput(float Input)
 	CurrentVerticalInput = Input;
 }
 
+void AArchVisOrbitPawn::AdjustFlySpeed(float Delta)
+{
+	// Multiply or divide speed based on scroll direction
+	if (Delta > 0)
+	{
+		FlySpeed *= FlySpeedAdjustMultiplier;
+	}
+	else if (Delta < 0)
+	{
+		FlySpeed /= FlySpeedAdjustMultiplier;
+	}
+	
+	// Clamp to valid range
+	FlySpeed = FMath::Clamp(FlySpeed, MinFlySpeed, MaxFlySpeed);
+	
+	if (bDebugEnabled)
+	{
+		UE_LOG(LogOrbitPawn, Log, TEXT("FlySpeed adjusted to: %f"), FlySpeed);
+	}
+}
+
 void AArchVisOrbitPawn::Look(FVector2D Delta)
 {
 	if (Delta.IsNearlyZero())

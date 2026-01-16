@@ -62,7 +62,7 @@ void AArchVisDraftingPawn::InterpolateCameraState(float DeltaTime)
 		return;
 	}
 
-	// Smooth interpolation to target values
+	// Smooth interpolation for zoom
 	SpringArm->TargetArmLength = FMath::FInterpTo(
 		SpringArm->TargetArmLength,
 		TargetArmLength,
@@ -70,12 +70,17 @@ void AArchVisDraftingPawn::InterpolateCameraState(float DeltaTime)
 		InterpSpeed
 	);
 
-	SetActorLocation(FMath::VInterpTo(
-		GetActorLocation(),
-		TargetLocation,
-		DeltaTime,
-		InterpSpeed
-	));
+	// Only interpolate position if not already at target (pan sets position instantly)
+	const FVector CurrentLocation = GetActorLocation();
+	if (!CurrentLocation.Equals(TargetLocation, 0.1f))
+	{
+		SetActorLocation(FMath::VInterpTo(
+			CurrentLocation,
+			TargetLocation,
+			DeltaTime,
+			InterpSpeed
+		));
+	}
 
 	// Update ortho width during interpolation
 	UpdateOrthoWidth();
@@ -116,19 +121,53 @@ void AArchVisDraftingPawn::Zoom(float Amount)
 
 void AArchVisDraftingPawn::Pan(FVector2D Delta)
 {
-	// AutoCAD-style pan: the point under the cursor should stay under the cursor
-	// Scale pan by ortho width - larger ortho width = more zoomed out = faster pan
-	float ZoomScale = 1.0f;
-	if (Camera)
-	{
-		ZoomScale = Camera->OrthoWidth / 1000.0f;
-	}
+	// Make the point under the cursor follow the cursor exactly
+	// Use deprojection for accurate screen-to-world conversion
 	
-	// With camera looking down (Pitch=-90, Yaw=0):
-	// Screen X (right) -> World X (positive)
-	// Screen Y (up) -> World Y (positive)
-	FVector MoveDelta = FVector(Delta.X, Delta.Y, 0.0f) * ZoomScale * PanSpeed;
-	TargetLocation -= MoveDelta;
+	if (!Camera || !SpringArm)
+	{
+		return;
+	}
+
+	APlayerController* PC = Cast<APlayerController>(GetController());
+	if (!PC)
+	{
+		return;
+	}
+
+	// Get current mouse position
+	float MouseX, MouseY;
+	if (!PC->GetMousePosition(MouseX, MouseY))
+	{
+		return;
+	}
+
+	// Calculate previous mouse position from delta
+	const float PrevMouseX = MouseX - Delta.X;
+	const float PrevMouseY = MouseY - Delta.Y;
+
+	// Deproject current and previous mouse positions to world space
+	FVector CurrWorldPos, CurrWorldDir;
+	FVector PrevWorldPos, PrevWorldDir;
+	
+	PC->DeprojectScreenPositionToWorld(MouseX, MouseY, CurrWorldPos, CurrWorldDir);
+	PC->DeprojectScreenPositionToWorld(PrevMouseX, PrevMouseY, PrevWorldPos, PrevWorldDir);
+
+	// For orthographic camera looking down, we can use the X,Y directly
+	// The world positions are on a plane at the camera's Z position
+	// We just need the XY difference
+	const FVector WorldDelta(
+		CurrWorldPos.X - PrevWorldPos.X,
+		CurrWorldPos.Y - PrevWorldPos.Y,
+		0.0f
+	);
+
+
+	// Move camera opposite to the delta (dragging world = camera moves opposite)
+	TargetLocation -= WorldDelta;
+
+	// Move instantly for 1:1 cursor tracking
+	SetActorLocation(TargetLocation);
 }
 
 void AArchVisDraftingPawn::ResetView()
@@ -183,4 +222,3 @@ void AArchVisDraftingPawn::UpdateOrthoWidth()
 		Camera->OrthoWidth = SpringArm->TargetArmLength * OrthoWidthMultiplier;
 	}
 }
-
