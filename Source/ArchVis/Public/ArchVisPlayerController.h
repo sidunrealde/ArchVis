@@ -5,9 +5,16 @@
 #include "RTPlanInputData.h"
 #include "RTPlanToolManager.h"
 #include "InputActionValue.h"
+#include "ArchVisPawnBase.h"
 #include "ArchVisPlayerController.generated.h"
 
 class AArchVisCameraController;
+class AArchVisPawnBase;
+class AArchVisDraftingPawn;
+class AArchVisOrbitPawn;
+class AArchVisFlyPawn;
+class AArchVisFirstPersonPawn;
+class AArchVisThirdPersonPawn;
 class UArchVisInputConfig;
 class UEnhancedInputLocalPlayerSubsystem;
 class UInputMappingContext;
@@ -32,8 +39,8 @@ enum class ESnapModifierMode : uint8
 UENUM(BlueprintType)
 enum class EArchVisInteractionMode : uint8
 {
-	Drafting2D,
-	Navigation3D
+	Drafting2D      UMETA(DisplayName = "2D Drafting"),
+	Navigation3D    UMETA(DisplayName = "3D Navigation")
 };
 
 /**
@@ -99,6 +106,63 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "ArchVis|Snap")
 	bool IsSnapEnabled() const;
 
+	// --- Pawn Management ---
+
+	// Switch to a different pawn type
+	UFUNCTION(BlueprintCallable, Category = "ArchVis|Pawn")
+	void SwitchToPawnType(EArchVisPawnType NewPawnType);
+
+	// Get current pawn type
+	UFUNCTION(BlueprintCallable, Category = "ArchVis|Pawn")
+	EArchVisPawnType GetCurrentPawnType() const { return CurrentPawnType; }
+
+	// Toggle between 2D and 3D pawns
+	UFUNCTION(BlueprintCallable, Category = "ArchVis|Pawn")
+	void ToggleViewPawn();
+
+	// Get the current ArchVis pawn (cast helper)
+	UFUNCTION(BlueprintCallable, Category = "ArchVis|Pawn")
+	AArchVisPawnBase* GetArchVisPawn() const;
+
+	/** Toggle verbose input/navigation debug logging at runtime. */
+	UFUNCTION(BlueprintCallable, Category = "ArchVis|Debug")
+	void SetInputDebugEnabled(bool bEnabled) { bInputDebugEnabled = bEnabled; }
+
+	UFUNCTION(BlueprintCallable, Category = "ArchVis|Debug")
+	bool IsInputDebugEnabled() const { return bInputDebugEnabled; }
+
+	/** Toggle input debug logging at runtime. */
+	UFUNCTION(Exec)
+	void ArchVisToggleInputDebug();
+
+	/** Set input debug logging explicitly (0/1). */
+	UFUNCTION(Exec)
+	void ArchVisSetInputDebug(int32 bEnabled);
+
+protected:
+	// --- Pawn Classes (Assign in BP or set defaults) ---
+	
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Pawn")
+	TSubclassOf<AArchVisDraftingPawn> DraftingPawnClass;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Pawn")
+	TSubclassOf<AArchVisOrbitPawn> OrbitPawnClass;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Pawn")
+	TSubclassOf<AArchVisFlyPawn> FlyPawnClass;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Pawn")
+	TSubclassOf<AArchVisFirstPersonPawn> FirstPersonPawnClass;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Pawn")
+	TSubclassOf<AArchVisThirdPersonPawn> ThirdPersonPawnClass;
+
+	// Current pawn type
+	EArchVisPawnType CurrentPawnType = EArchVisPawnType::Drafting2D;
+
+	// Spawn and possess a pawn of the given type
+	APawn* SpawnArchVisPawn(EArchVisPawnType PawnType, FVector Location, FRotator Rotation);
+
 protected:
 	// Input Config Data Asset (Assign in BP)
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input")
@@ -147,14 +211,23 @@ protected:
 	void OnZoom(const FInputActionValue& Value);
 	void OnOrbit(const FInputActionValue& Value);
 	void OnOrbitDelta(const FInputActionValue& Value);
+	void OnFlyMode(const FInputActionValue& Value);
+	void OnDollyZoom(const FInputActionValue& Value);
 	void OnResetView(const FInputActionValue& Value);
 	void OnFocusSelection(const FInputActionValue& Value);
 	void OnPointerPosition(const FInputActionValue& Value);
 	void OnSnapToggle(const FInputActionValue& Value);
 	void OnGridToggle(const FInputActionValue& Value);
 
+	// --- Fly Pawn Movement Handlers ---
+	void OnMove(const FInputActionValue& Value);
+	void OnMoveUp(const FInputActionValue& Value);
+	void OnMoveDown(const FInputActionValue& Value);
+	void OnLook(const FInputActionValue& Value);
+
 	// --- Selection Input Handlers ---
-	void OnSelect(const FInputActionValue& Value);
+	void OnSelectStarted(const FInputActionValue& Value);
+	void OnSelectCompleted(const FInputActionValue& Value);
 	void OnSelectAdd(const FInputActionValue& Value);
 	void OnSelectToggle(const FInputActionValue& Value);
 	void OnSelectAll(const FInputActionValue& Value);
@@ -241,13 +314,27 @@ protected:
 	bool bShiftDown = false;
 	bool bAltDown = false;
 	bool bCtrlDown = false;
+
+	// Drafting constraint states (used by tools via FRTPointerEvent)
 	bool bOrthoLockActive = false;
 	bool bAngleSnapEnabled = false;
+
+	/** Raw mouse button states (tracked via selection/pan/fly handlers). */
+	bool bLMBDown = false;
+	bool bRMBDown = false;
+	bool bMMBDown = false;
 
 	// Snap state
 	bool bSnapToggledOn = true;
 	bool bSnapModifierHeld = false;
 	bool bGridVisible = true;
+
+	// Mouse tracking for pan
+	FVector2D LastMousePosition = FVector2D::ZeroVector;
+
+	// WASD movement state (for 3D fly mode)
+	FVector2D CurrentMoveInput = FVector2D::ZeroVector;
+	float CurrentVerticalMoveInput = 0.0f;
 
 	// Backspace repeat state
 	bool bBackspaceHeld = false;
@@ -272,4 +359,28 @@ protected:
 
 	UPROPERTY(Transient)
 	TObjectPtr<AArchVisCameraController> CameraController;
+
+	/** When enabled, logs a small amount of debug output for navigation input. */
+	UPROPERTY(EditAnywhere, Category = "ArchVis|Debug")
+	bool bInputDebugEnabled = false;
+
+	/**
+	 * Unified “Unreal Editor-style” navigation state for the 3D orbit pawn.
+	 * This is derived from modifier + mouse buttons.
+	 */
+	struct FNav3DState
+	{
+		bool bPan = false;     // MMB
+		bool bOrbit = false;   // Alt + LMB
+		bool bFly = false;     // RMB
+		bool bDolly = false;   // Alt + RMB
+	};
+
+	FNav3DState GetNav3DState() const;
+
+	/** Emits a quick snapshot of current mode + button/modifier states. */
+	void DebugLogInputSnapshot(const TCHAR* Context, const FVector2D& MouseDelta = FVector2D::ZeroVector) const;
+
+	/** Emits debug logs for nav state changes when enabled. */
+	void DebugLogNavState(const TCHAR* Context, const FVector2D& MouseDelta) const;
 };

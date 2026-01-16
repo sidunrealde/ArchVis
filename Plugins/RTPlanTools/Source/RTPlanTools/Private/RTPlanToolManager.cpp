@@ -48,6 +48,10 @@ void URTPlanToolManager::SelectTool(TSubclassOf<URTPlanToolBase> ToolClass)
 
 void URTPlanToolManager::SelectToolByType(ERTPlanToolType ToolType)
 {
+	UE_LOG(LogTemp, Log, TEXT("SelectToolByType: %d, CachedSelectTool=%s"), 
+		static_cast<int32>(ToolType), 
+		CachedSelectTool ? TEXT("Valid") : TEXT("NULL"));
+	
 	if (ActiveTool)
 	{
 		ActiveTool->OnExit();
@@ -63,6 +67,15 @@ void URTPlanToolManager::SelectToolByType(ERTPlanToolType ToolType)
 		ActiveTool = CachedSelectTool;
 		if (ActiveTool)
 		{
+			ActiveTool->OnEnter();
+			UE_LOG(LogTemp, Log, TEXT("Select tool activated"));
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("CachedSelectTool is NULL! Creating new one."));
+			CachedSelectTool = NewObject<URTPlanSelectTool>(this);
+			CachedSelectTool->Init(Document, &SpatialIndex);
+			ActiveTool = CachedSelectTool;
 			ActiveTool->OnEnter();
 		}
 		break;

@@ -1,16 +1,19 @@
 ﻿#include "ArchVisGameMode.h"
 #include "RTPlanShellActor.h"
 #include "RTPlanNetDriver.h"
+#include "RTPlanToolManager.h"
 #include "ArchVisHUD.h"
 #include "ArchVisPlayerController.h"
+#include "ArchVisDraftingPawn.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogArchVisGM, Log, All);
 
 AArchVisGameMode::AArchVisGameMode()
 {
-	// Set default pawn class to our custom controller/pawn if needed
+	// Set default classes
 	PlayerControllerClass = AArchVisPlayerController::StaticClass();
 	HUDClass = AArchVisHUD::StaticClass();
+	DefaultPawnClass = AArchVisDraftingPawn::StaticClass();
 }
 
 void AArchVisGameMode::StartPlay()
@@ -36,6 +39,10 @@ void AArchVisGameMode::StartPlay()
 	{
 		ToolManager->Initialize(Document);
 		UE_LOG(LogArchVisGM, Log, TEXT("  - ToolManager Created and Initialized"));
+		
+		// Select the default tool (Select tool)
+		ToolManager->SelectToolByType(ERTPlanToolType::Select);
+		UE_LOG(LogArchVisGM, Log, TEXT("  - Default tool set to Select"));
 	}
 	else
 	{

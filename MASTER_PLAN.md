@@ -31,8 +31,13 @@
 | Component | Status |
 |-----------|--------|
 | `AArchVisGameMode` | ✅ Creates Document, ToolManager, ShellActor, NetDriver |
-| `AArchVisPlayerController` | ✅ Enhanced Input, Virtual Cursor, Modifier Keys |
-| `AArchVisCameraController` | ✅ 2D/3D toggle, Pan/Zoom, Ortho/Perspective |
+| `AArchVisPlayerController` | ✅ Enhanced Input, Virtual Cursor, Pawn Switching, Undo/Redo |
+| `AArchVisCameraController` | ⚠️ Legacy - Replaced by Pawn system |
+| `AArchVisPawnBase` | ✅ Base pawn with camera controls |
+| `AArchVisDraftingPawn` | ✅ 2D Top-down orthographic drafting |
+| `AArchVisOrbitPawn` | ✅ 3D Perspective orbit camera |
+| `AArchVisFirstPersonPawn` | ✅ First-person walkthrough character |
+| `AArchVisThirdPersonPawn` | ✅ Third-person walkthrough character |
 | `AArchVisHUD` | ✅ Crosshair, Wall Preview, Measurements, Length/Angle Labels |
 
 ---
@@ -42,8 +47,8 @@
 | Phase | Description | Status |
 |-------|-------------|--------|
 | **Phase 0** | Baseline plumbing (game ↔ plugins) | ✅ Complete |
-| **Phase 1** | Viewport & Input (CAD Feel) | ✅ Complete (input assets created) |
-| **Phase 2** | Wall Tool 2.0 (Click-Move-Click) | ⏳ 90% (cancel/finish behaviors pending) |
+| **Phase 1** | Viewport & Input (CAD Feel) | ✅ Complete (input assets + pawn system) |
+| **Phase 2** | Wall Tool 2.0 (Click-Move-Click) | ✅ Complete (all drawing features done) |
 | **Phase 3** | 2D Visualization | ⏳ 30% (crosshair done, plan drawing pending) |
 | **Phase 4** | Room Detection & Generation | ❌ Not Started |
 | **Phase 5** | Properties & Editing | ⏳ 60% (SelectTool done, UI pending) |
@@ -298,13 +303,28 @@ This section tracks the implementation of C++ handlers for each Input Action.
 ### Key Source Files
 | File | Purpose |
 |------|---------|
-| `Source/ArchVis/Private/ArchVisPlayerController.cpp` | Input handling, IMC management |
+| `Source/ArchVis/Private/ArchVisPlayerController.cpp` | Input handling, IMC management, Pawn switching |
 | `Source/ArchVis/Public/ArchVisInputConfig.h` | Input config data asset class |
 | `Source/ArchVis/Private/ArchVisHUD.cpp` | HUD drawing, crosshair, measurements |
-| `Source/ArchVis/Private/ArchVisCameraController.cpp` | Camera modes, pan/zoom/orbit |
+| `Source/ArchVis/Private/ArchVisPawnBase.cpp` | Base pawn with camera controls |
+| `Source/ArchVis/Private/ArchVisDraftingPawn.cpp` | 2D orthographic drafting pawn |
+| `Source/ArchVis/Private/ArchVisOrbitPawn.cpp` | 3D perspective orbit pawn |
+| `Source/ArchVis/Private/ArchVisFirstPersonPawn.cpp` | First-person walkthrough character |
+| `Source/ArchVis/Private/ArchVisThirdPersonPawn.cpp` | Third-person walkthrough character |
+| `Source/ArchVis/Private/ArchVisCameraController.cpp` | Legacy camera modes (deprecated) |
 | `Plugins/RTPlanTools/Private/Tools/RTPlanLineTool.cpp` | Line/Polyline tool |
 | `Plugins/RTPlanTools/Private/Tools/RTPlanSelectTool.cpp` | Selection tool |
 | `Plugins/RTPlanTools/Private/RTPlanToolManager.cpp` | Tool lifecycle management |
+
+### Pawn Architecture
+| Pawn Class | Type | Features |
+|------------|------|----------|
+| `AArchVisPawnBase` | Abstract base | Spring arm, camera, pan/zoom/orbit interface |
+| `AArchVisDraftingPawn` | 2D Drafting | Top-down orthographic, fixed rotation |
+| `AArchVisOrbitPawn` | 3D Orbit | Perspective, orbit around target point |
+| `AArchVisFirstPersonPawn` | First Person | Character-based, WASD + mouselook |
+| `AArchVisThirdPersonPawn` | Third Person | Character-based, camera boom, zoom |
+| `ARTPlanVRPawn` | VR (plugin) | Motion controllers, teleport locomotion |
 
 ### Key Content Assets
 | Asset | Purpose |

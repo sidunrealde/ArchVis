@@ -129,10 +129,28 @@ public:
 	TObjectPtr<UInputAction> IA_Zoom;  // Mouse wheel
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|View")
-	TObjectPtr<UInputAction> IA_Orbit;  // RMB held (3D only)
+	TObjectPtr<UInputAction> IA_Move;  // WASD movement (Fly pawn)
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|View")
+	TObjectPtr<UInputAction> IA_MoveUp;  // E key (Fly pawn up)
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|View")
+	TObjectPtr<UInputAction> IA_MoveDown;  // Q key (Fly pawn down)
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|View")
+	TObjectPtr<UInputAction> IA_Look;  // Mouse XY for look (Fly pawn)
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|View")
+	TObjectPtr<UInputAction> IA_Orbit;  // Alt+LMB held (3D only)
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|View")
 	TObjectPtr<UInputAction> IA_OrbitDelta;  // Mouse XY for orbit
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|View")
+	TObjectPtr<UInputAction> IA_DollyZoom;  // Alt+RMB drag Y axis
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|View")
+	TObjectPtr<UInputAction> IA_FlyMode;  // RMB held - enables WASD movement
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|View")
 	TObjectPtr<UInputAction> IA_ResetView;  // Home key

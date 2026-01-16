@@ -15,11 +15,19 @@ Legend: [x] done, [-] partial, [ ] pending
 ---
 
 ## Phase 1: Viewport & Input (The "CAD Feel")
-### 1.1 Camera Controller: 2D/3D switching logic
-- [x] Top-down orthographic mode.
-- [x] Perspective mode.
-- [x] Toggle between modes.
-- [x] Pan + zoom.
+### 1.1 Camera/Pawn System: 2D/3D switching logic
+- [x] Top-down orthographic mode (`AArchVisDraftingPawn`).
+- [x] Perspective orbit mode (`AArchVisOrbitPawn`).
+- [x] Toggle between 2D/3D pawns (`SwitchToPawnType()`).
+- [x] Pan + zoom on 2D pawn (AutoCAD-style).
+- [-] Pan + zoom on 3D pawn (needs fixing).
+- [-] Orbit controls on 3D pawn (Alt+LMB - needs fixing).
+- [-] Fly mode on 3D pawn (RMB+WASD - needs fixing).
+- [x] First-person walkthrough pawn (`AArchVisFirstPersonPawn`).
+- [x] Third-person walkthrough pawn (`AArchVisThirdPersonPawn`).
+- [x] Base pawn class with common camera interface (`AArchVisPawnBase`).
+- [x] Camera state transfer when switching pawns (`SetCameraTransform()`).
+- [x] Undo/Redo wired to Document (`OnUndo`, `OnRedo`).
 
 ### 1.2 HUD: full-screen crosshair cursor
 - [x] Crosshair lines (full screen).
@@ -320,18 +328,33 @@ Common 2D drafting controls.
 ---
 
 #### IMC_3D_Base (Priority 1 - Active in 3D Mode)
-Common 3D navigation controls.
+Common 3D navigation controls (Unreal Editor-style).
 
-**Note:** Pan and Orbit use Chorded Actions. `IA_PanDelta` only triggers while MMB is held. `IA_OrbitDelta` only triggers while RMB is held.
+**Navigation Controls:**
+- **MMB + Drag**: Pan in camera plane
+- **Scroll Wheel**: Zoom in/out
+- **Alt + LMB + Drag**: Orbit around target point
+- **RMB + Drag**: Look around (FPS-style)
+- **RMB + WASD**: Fly movement
+- **RMB + Q/E**: Fly up/down
+- **Alt + RMB + Drag**: Dolly zoom
 
 | Action | Key Binding | Modifiers |
 |--------|-------------|-----------|
 | `IA_Pan` | Middle Mouse Button | - |
 | `IA_PanDelta` | Mouse XY 2D-Axis | Chorded Action: `IA_Pan` |
 | `IA_Zoom` | Mouse Wheel Axis | - |
-| `IA_Orbit` | Right Mouse Button | - |
+| `IA_Orbit` | Left Mouse Button | Chorded Action: `IA_ModifierAlt` |
 | `IA_OrbitDelta` | Mouse XY 2D-Axis | Chorded Action: `IA_Orbit` |
-| `IA_PointerPosition` | Mouse XY 2D-Axis | - |
+| `IA_FlyMode` | Right Mouse Button | - |
+| `IA_Look` | Mouse XY 2D-Axis | Chorded Action: `IA_FlyMode` |
+| `IA_Move` (W) | W | Chorded Action: `IA_FlyMode` |
+| `IA_Move` (S) | S | Chorded Action: `IA_FlyMode`, Negate Y |
+| `IA_Move` (A) | A | Chorded Action: `IA_FlyMode`, Swizzle YXZ, Negate |
+| `IA_Move` (D) | D | Chorded Action: `IA_FlyMode`, Swizzle YXZ |
+| `IA_MoveUp` | E | Chorded Action: `IA_FlyMode` |
+| `IA_MoveDown` | Q | Chorded Action: `IA_FlyMode` |
+| `IA_DollyZoom` | Mouse Y | Chorded Action: `IA_ModifierAlt`, Chorded Action: `IA_FlyMode` |
 | `IA_ResetView` | Home | - |
 | `IA_FocusSelection` | F | - |
 
@@ -350,7 +373,7 @@ Selection tool controls.
 | `IA_BoxSelectEnd` | Left Mouse Button (Released) | - |
 | `IA_SelectAll` | A | Chorded Action: `IA_ModifierCtrl` |
 | `IA_DeselectAll` | D | Chorded Action: `IA_ModifierCtrl` |
-| `IA_CycleSelection` | Mouse Wheel Axis | - |
+| `IA_CycleSelection` | Spacebar | - |
 
 ---
 
