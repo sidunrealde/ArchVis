@@ -62,7 +62,19 @@ void UOrbitInputComponent::SetupInputBindings()
 	// --- Navigation Actions ---
 	// Use separate lambdas for Started/Completed to explicitly set state
 	
-	// Select action (used with Alt modifier for orbit)
+	// Orbit action (Alt + LMB via chorded action in IMC)
+	if (InputConfig->IA_Orbit)
+	{
+		BindAction(InputConfig->IA_Orbit, ETriggerEvent::Started, this, &UOrbitInputComponent::OnOrbitActionStarted);
+		BindAction(InputConfig->IA_Orbit, ETriggerEvent::Completed, this, &UOrbitInputComponent::OnOrbitActionCompleted);
+		UE_LOG(LogOrbitInput, Log, TEXT("SetupInputBindings: IA_Orbit BOUND"));
+	}
+	else
+	{
+		UE_LOG(LogOrbitInput, Warning, TEXT("SetupInputBindings: IA_Orbit is NULL - not bound!"));
+	}
+
+	// Select action (for other selection purposes, not orbit)
 	if (InputConfig->IA_Select)
 	{
 		BindAction(InputConfig->IA_Select, ETriggerEvent::Started, this, &UOrbitInputComponent::OnSelectActionStarted);
@@ -165,9 +177,9 @@ void UOrbitInputComponent::RemoveInputMappingContexts()
 
 // --- Input Handlers ---
 
-void UOrbitInputComponent::OnSelectActionStarted(const FInputActionValue& Value)
+void UOrbitInputComponent::OnOrbitActionStarted(const FInputActionValue& Value)
 {
-	bSelectActionActive = true;
+	bOrbitActionActive = true;
 	
 	// Reset mouse position on start
 	if (APlayerController* PC = GetPlayerController())
@@ -181,36 +193,73 @@ void UOrbitInputComponent::OnSelectActionStarted(const FInputActionValue& Value)
 	
 	UpdateMouseLockState();
 
-	if (bDebugEnabled)
-	{
-		UE_LOG(LogOrbitInput, Log, TEXT("IA_Select: Started Alt=%d"), bAltDown);
-	}
+	UE_LOG(LogOrbitInput, Log, TEXT("IA_Orbit: Started - bOrbitActionActive=%d"), bOrbitActionActive);
 
-	// Update pawn orbit mode (Alt + Select = Orbit)
+	// Activate orbit mode on pawn
 	if (AArchVisOrbitPawn* Pawn = GetOrbitPawn())
 	{
-		if (bAltDown)
+		Pawn->SetOrbitModeActive(true);
+	}
+}
+
+void UOrbitInputComponent::OnOrbitActionCompleted(const FInputActionValue& Value)
+{
+	bOrbitActionActive = false;
+	UpdateMouseLockState();
+
+	UE_LOG(LogOrbitInput, Log, TEXT("IA_Orbit: Completed - bOrbitActionActive=%d"), bOrbitActionActive);
+
+	// Deactivate orbit mode on pawn
+	if (AArchVisOrbitPawn* Pawn = GetOrbitPawn())
+	{
+		Pawn->SetOrbitModeActive(false);
+	}
+}
+
+void UOrbitInputComponent::OnSelectActionStarted(const FInputActionValue& Value)
+{
+	bSelectActionActive = true;
+	
+	// Reset mouse position on start
+	if (APlayerController* PC = GetPlayerController())
+	{
+		float MouseX, MouseY;
+		if (PC->GetMousePosition(MouseX, MouseY))
 		{
+			LastMousePosition = FVector2D(MouseX, MouseY);
+		}
+	}
+
+	UE_LOG(LogOrbitInput, Log, TEXT("IA_Select: Started - bSelectActionActive=%d bAltDown=%d"), bSelectActionActive, bAltDown);
+
+	// Alt + Select = Orbit mode
+	if (bAltDown)
+	{
+		if (AArchVisOrbitPawn* Pawn = GetOrbitPawn())
+		{
+			UE_LOG(LogOrbitInput, Log, TEXT("  -> Activating ORBIT mode via Alt+Select"));
 			Pawn->SetOrbitModeActive(true);
 		}
+		UpdateMouseLockState();
 	}
 }
 
 void UOrbitInputComponent::OnSelectActionCompleted(const FInputActionValue& Value)
 {
 	bSelectActionActive = false;
-	UpdateMouseLockState();
 
-	if (bDebugEnabled)
-	{
-		UE_LOG(LogOrbitInput, Log, TEXT("IA_Select: Completed"));
-	}
+	UE_LOG(LogOrbitInput, Log, TEXT("IA_Select: Completed - bSelectActionActive=%d"), bSelectActionActive);
 
-	// End orbit mode
+	// End orbit mode when Select is released
 	if (AArchVisOrbitPawn* Pawn = GetOrbitPawn())
 	{
-		Pawn->SetOrbitModeActive(false);
+		if (Pawn->IsOrbitModeActive())
+		{
+			UE_LOG(LogOrbitInput, Log, TEXT("  -> Deactivating ORBIT mode"));
+			Pawn->SetOrbitModeActive(false);
+		}
 	}
+	UpdateMouseLockState();
 }
 
 void UOrbitInputComponent::OnFlyModeActionStarted(const FInputActionValue& Value)
@@ -298,12 +347,8 @@ void UOrbitInputComponent::OnPanActionCompleted(const FInputActionValue& Value)
 void UOrbitInputComponent::OnAltModifierStarted(const FInputActionValue& Value)
 {
 	bAltDown = true;
-	UpdateMouseLockState();
 
-	if (bDebugEnabled)
-	{
-		UE_LOG(LogOrbitInput, Log, TEXT("IA_ModifierAlt: Started Select=%d FlyMode=%d"), bSelectActionActive, bFlyModeActive);
-	}
+	UE_LOG(LogOrbitInput, Log, TEXT("IA_ModifierAlt: Started - bAltDown=%d bSelectActionActive=%d bFlyModeActive=%d"), bAltDown, bSelectActionActive, bFlyModeActive);
 
 	// Update pawn mode when Alt is pressed while other actions are held
 	if (AArchVisOrbitPawn* Pawn = GetOrbitPawn())
@@ -311,25 +356,26 @@ void UOrbitInputComponent::OnAltModifierStarted(const FInputActionValue& Value)
 		if (bFlyModeActive)
 		{
 			// Switch from fly to dolly
+			UE_LOG(LogOrbitInput, Log, TEXT("  -> Switching to DOLLY mode"));
 			Pawn->SetFlyModeActive(false);
 			Pawn->SetDollyModeActive(true);
 		}
 		if (bSelectActionActive)
 		{
+			// Alt pressed while Select is held = Orbit
+			UE_LOG(LogOrbitInput, Log, TEXT("  -> Activating ORBIT mode (Alt pressed while Select held)"));
 			Pawn->SetOrbitModeActive(true);
 		}
 	}
+	
+	UpdateMouseLockState();
 }
 
 void UOrbitInputComponent::OnAltModifierCompleted(const FInputActionValue& Value)
 {
 	bAltDown = false;
-	UpdateMouseLockState();
 
-	if (bDebugEnabled)
-	{
-		UE_LOG(LogOrbitInput, Log, TEXT("IA_ModifierAlt: Completed Select=%d FlyMode=%d"), bSelectActionActive, bFlyModeActive);
-	}
+	UE_LOG(LogOrbitInput, Log, TEXT("IA_ModifierAlt: Completed - bAltDown=%d bSelectActionActive=%d bFlyModeActive=%d"), bAltDown, bSelectActionActive, bFlyModeActive);
 
 	// Update pawn mode when Alt is released while other actions are held
 	if (AArchVisOrbitPawn* Pawn = GetOrbitPawn())
@@ -342,9 +388,12 @@ void UOrbitInputComponent::OnAltModifierCompleted(const FInputActionValue& Value
 		}
 		if (bSelectActionActive)
 		{
+			// Alt released while Select is still held = end orbit
 			Pawn->SetOrbitModeActive(false);
 		}
 	}
+	
+	UpdateMouseLockState();
 }
 
 void UOrbitInputComponent::OnShiftModifierStarted(const FInputActionValue& Value)
@@ -414,6 +463,20 @@ void UOrbitInputComponent::OnMoveDown(const FInputActionValue& Value)
 
 // --- Private Helpers ---
 
+void UOrbitInputComponent::ValidateActionStates()
+{
+	// With proper Enhanced Input trigger configuration (Down trigger), 
+	// we don't need to validate against raw key state.
+	// This function is kept for potential future debugging but does nothing by default.
+	
+	// If you experience stuck states, ensure your IMC uses:
+	// - IA_Select: Down trigger (not Pressed or Tap)
+	// - IA_Pan: Down trigger  
+	// - IA_FlyMode: Down trigger
+	// - IA_ModifierAlt: Down trigger
+	// - IA_ModifierShift: Down trigger
+}
+
 UOrbitInputComponent::ENavMode UOrbitInputComponent::GetCurrentNavMode() const
 {
 	// Priority: Dolly > Orbit > Pan > Look
@@ -421,6 +484,12 @@ UOrbitInputComponent::ENavMode UOrbitInputComponent::GetCurrentNavMode() const
 	{
 		return ENavMode::Dolly;
 	}
+	// IA_Orbit action (Alt+LMB chorded)
+	if (bOrbitActionActive)
+	{
+		return ENavMode::Orbit;
+	}
+	// Alt + Select = Orbit
 	if (bAltDown && bSelectActionActive)
 	{
 		return ENavMode::Orbit;
@@ -449,9 +518,7 @@ void UOrbitInputComponent::UpdateMouseLockState()
 
 	if (bShouldLock && !bMouseLocked)
 	{
-		// Lock mouse - game only input, hide cursor
-		FInputModeGameOnly InputMode;
-		PC->SetInputMode(InputMode);
+		// Hide cursor during navigation - DON'T change input mode as it disrupts Enhanced Input
 		PC->SetShowMouseCursor(false);
 		bMouseLocked = true;
 
@@ -469,10 +536,7 @@ void UOrbitInputComponent::UpdateMouseLockState()
 	}
 	else if (!bShouldLock && bMouseLocked)
 	{
-		// Unlock mouse - game and UI input, show cursor
-		FInputModeGameAndUI InputMode;
-		InputMode.SetHideCursorDuringCapture(false);
-		PC->SetInputMode(InputMode);
+		// Show cursor when navigation ends
 		PC->SetShowMouseCursor(true);
 		bMouseLocked = false;
 

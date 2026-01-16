@@ -10,10 +10,17 @@ AArchVisDraftingPawn::AArchVisDraftingPawn()
 {
 	PawnType = EArchVisPawnType::Drafting2D;
 	
-	// Set default zoom range for 2D drafting
-	MinZoom = 1000.0f;
-	MaxZoom = 20000.0f;
-	TargetArmLength = 5000.0f;
+	// Create spring arm (attached to RootScene from base class)
+	SpringArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("SpringArm"));
+	SpringArm->SetupAttachment(RootScene);
+	SpringArm->bDoCollisionTest = false;
+	SpringArm->TargetArmLength = TargetArmLength;
+	SpringArm->bEnableCameraLag = false;
+	SpringArm->bEnableCameraRotationLag = false;
+
+	// Create camera attached to spring arm
+	Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
+	Camera->SetupAttachment(SpringArm);
 
 	// Create input component
 	DraftingInput = CreateDefaultSubobject<UDraftingInputComponent>(TEXT("DraftingInput"));
@@ -22,6 +29,10 @@ AArchVisDraftingPawn::AArchVisDraftingPawn()
 void AArchVisDraftingPawn::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// Initialize target state
+	TargetArmLength = SpringArm->TargetArmLength;
+	TargetLocation = GetActorLocation();
 
 	// Configure for orthographic top-down view
 	if (Camera)
@@ -33,10 +44,41 @@ void AArchVisDraftingPawn::BeginPlay()
 	if (SpringArm)
 	{
 		// Look straight down (-Z axis in world = looking at XY plane)
-		// Pitch -90 = looking down, Yaw 0 = X is right, Y is forward on screen
-		TargetRotation = FRotator(-90.0f, 0.0f, 0.0f);
-		SpringArm->SetRelativeRotation(TargetRotation);
+		SpringArm->SetRelativeRotation(FRotator(-90.0f, 0.0f, 0.0f));
 	}
+}
+
+void AArchVisDraftingPawn::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+
+	InterpolateCameraState(DeltaTime);
+}
+
+void AArchVisDraftingPawn::InterpolateCameraState(float DeltaTime)
+{
+	if (!SpringArm)
+	{
+		return;
+	}
+
+	// Smooth interpolation to target values
+	SpringArm->TargetArmLength = FMath::FInterpTo(
+		SpringArm->TargetArmLength,
+		TargetArmLength,
+		DeltaTime,
+		InterpSpeed
+	);
+
+	SetActorLocation(FMath::VInterpTo(
+		GetActorLocation(),
+		TargetLocation,
+		DeltaTime,
+		InterpSpeed
+	));
+
+	// Update ortho width during interpolation
+	UpdateOrthoWidth();
 }
 
 void AArchVisDraftingPawn::PossessedBy(AController* NewController)
@@ -69,24 +111,17 @@ void AArchVisDraftingPawn::InitializeInput(UArchVisInputConfig* InputConfig)
 
 void AArchVisDraftingPawn::Zoom(float Amount)
 {
-	float OldArmLength = TargetArmLength;
 	TargetArmLength = FMath::Clamp(TargetArmLength - (Amount * ZoomSpeed), MinZoom, MaxZoom);
-	UE_LOG(LogTemp, Log, TEXT("DraftingPawn::Zoom: Amount=%f, OldArm=%f, NewArm=%f, ZoomSpeed=%f"), 
-		Amount, OldArmLength, TargetArmLength, ZoomSpeed);
-	UpdateOrthoWidth();
 }
 
 void AArchVisDraftingPawn::Pan(FVector2D Delta)
 {
 	// AutoCAD-style pan: the point under the cursor should stay under the cursor
-	// We need to convert screen delta to world delta based on zoom level
-	
-	// OrthoWidth represents the visible width in world units
+	// Scale pan by ortho width - larger ortho width = more zoomed out = faster pan
 	float ZoomScale = 1.0f;
 	if (Camera)
 	{
-		// Scale pan by ortho width - larger ortho width = more zoomed out = faster pan
-		ZoomScale = Camera->OrthoWidth / 1000.0f; // Normalize to reasonable speed
+		ZoomScale = Camera->OrthoWidth / 1000.0f;
 	}
 	
 	// With camera looking down (Pitch=-90, Yaw=0):
@@ -100,8 +135,11 @@ void AArchVisDraftingPawn::ResetView()
 {
 	TargetLocation = FVector::ZeroVector;
 	TargetArmLength = 5000.0f;
-	TargetRotation = FRotator(-90.0f, 0.0f, 0.0f);
-	UpdateOrthoWidth();
+}
+
+void AArchVisDraftingPawn::FocusOnLocation(FVector WorldLocation)
+{
+	TargetLocation = FVector(WorldLocation.X, WorldLocation.Y, 0.0f);
 }
 
 void AArchVisDraftingPawn::SetCameraTransform(FVector Location, FRotator Rotation, float ZoomLevel)
@@ -109,13 +147,10 @@ void AArchVisDraftingPawn::SetCameraTransform(FVector Location, FRotator Rotatio
 	// For 2D, we only use location and zoom - rotation is fixed
 	TargetLocation = FVector(Location.X, Location.Y, 0.0f);
 	TargetArmLength = ZoomLevel;
-	TargetRotation = FRotator(-90.0f, 0.0f, 0.0f);
-	UpdateOrthoWidth();
 }
 
 float AArchVisDraftingPawn::GetZoomLevel() const
 {
-	// In 2D, zoom level is the ortho width
 	if (Camera)
 	{
 		return Camera->OrthoWidth;
@@ -123,11 +158,29 @@ float AArchVisDraftingPawn::GetZoomLevel() const
 	return TargetArmLength * OrthoWidthMultiplier;
 }
 
-void AArchVisDraftingPawn::UpdateOrthoWidth()
+FVector AArchVisDraftingPawn::GetCameraLocation() const
 {
 	if (Camera)
 	{
-		Camera->OrthoWidth = TargetArmLength * OrthoWidthMultiplier;
+		return Camera->GetComponentLocation();
+	}
+	return GetActorLocation();
+}
+
+FRotator AArchVisDraftingPawn::GetCameraRotation() const
+{
+	if (Camera)
+	{
+		return Camera->GetComponentRotation();
+	}
+	return FRotator(-90.0f, 0.0f, 0.0f);
+}
+
+void AArchVisDraftingPawn::UpdateOrthoWidth()
+{
+	if (Camera && SpringArm)
+	{
+		Camera->OrthoWidth = SpringArm->TargetArmLength * OrthoWidthMultiplier;
 	}
 }
 

@@ -38,14 +38,18 @@ protected:
 
 	// --- Input Action Handlers ---
 	
-	// Selection action (for orbit with Alt)
+	// Orbit action (Alt + LMB via chorded action)
+	void OnOrbitActionStarted(const FInputActionValue& Value);
+	void OnOrbitActionCompleted(const FInputActionValue& Value);
+
+	// Selection action (for other selection purposes)
 	void OnSelectActionStarted(const FInputActionValue& Value);
 	void OnSelectActionCompleted(const FInputActionValue& Value);
-	
+
 	// Fly mode action (also dolly with Alt)
 	void OnFlyModeActionStarted(const FInputActionValue& Value);
 	void OnFlyModeActionCompleted(const FInputActionValue& Value);
-	
+
 	// Pan action
 	void OnPanActionStarted(const FInputActionValue& Value);
 	void OnPanActionCompleted(const FInputActionValue& Value);
@@ -83,7 +87,11 @@ private:
 	ENavMode GetCurrentNavMode() const;
 	void UpdateMouseLockState();
 
+	// Validate action states against actual key states to prevent stuck states
+	void ValidateActionStates();
+
 	// Action states (triggered by Enhanced Input actions)
+	bool bOrbitActionActive = false;    // IA_Orbit (Alt + LMB chorded)
 	bool bSelectActionActive = false;   // IA_Select
 	bool bFlyModeActive = false;        // IA_FlyMode
 	bool bPanActionActive = false;      // IA_Pan

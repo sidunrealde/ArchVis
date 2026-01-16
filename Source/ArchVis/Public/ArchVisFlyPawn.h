@@ -7,9 +7,12 @@
 #include "ArchVisPawnBase.h"
 #include "ArchVisFlyPawn.generated.h"
 
+class UCameraComponent;
+
 /**
  * Free-flying pawn for scene exploration.
  * Similar to Unreal's default pawn - WASD + mouse look, no collision.
+ * Has its own camera (no spring arm).
  */
 UCLASS()
 class ARCHVIS_API AArchVisFlyPawn : public AArchVisPawnBase
@@ -21,11 +24,17 @@ public:
 
 	virtual void Tick(float DeltaTime) override;
 
-	// Override base pawn methods
+	// --- Camera Interface Implementation ---
 	virtual void Zoom(float Amount) override;
 	virtual void Pan(FVector2D Delta) override;
 	virtual void Orbit(FVector2D Delta) override;
 	virtual void ResetView() override;
+	virtual void FocusOnLocation(FVector WorldLocation) override;
+	virtual void SetCameraTransform(FVector Location, FRotator Rotation, float ZoomLevel) override;
+	virtual float GetZoomLevel() const override;
+	virtual UCameraComponent* GetCameraComponent() const override { return Camera; }
+	virtual FVector GetCameraLocation() const override;
+	virtual FRotator GetCameraRotation() const override;
 
 	// Look around (mouse look)
 	UFUNCTION(BlueprintCallable, Category = "ArchVis|Input")
@@ -43,33 +52,39 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "ArchVis|Input")
 	void SetVerticalInput(float Input);
 
+	// Set speed boost state
+	void SetSpeedBoost(bool bBoost) { bSpeedBoost = bBoost; }
+
 protected:
 	virtual void BeginPlay() override;
 
-	// Fly speed
+	// --- Components ---
+	
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
+	TObjectPtr<UCameraComponent> Camera;
+
+	// --- Movement Settings ---
+	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
 	float FlySpeed = 1000.0f;
 
-	// Fast fly speed multiplier (when holding shift)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
 	float FastFlyMultiplier = 3.0f;
 
-	// Look sensitivity
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
-	float LookSensitivity = 1.0f;
+	float LookSensitivity = 0.3f;
 
-	// Speed boost state (shift held)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
+	float PanSpeed = 10.0f;
+
+	// --- State ---
+	
 	bool bSpeedBoost = false;
-
-	// Current movement input
 	FVector2D CurrentMovementInput = FVector2D::ZeroVector;
 	float CurrentVerticalInput = 0.0f;
-
-	// Current look rotation
-	FRotator CurrentRotation = FRotator::ZeroRotator;
-
-public:
-	// Set speed boost state
-	void SetSpeedBoost(bool bBoost) { bSpeedBoost = bBoost; }
+	
+	// Target camera state (for smooth interpolation)
+	FVector TargetLocation = FVector::ZeroVector;
+	FRotator TargetRotation = FRotator::ZeroRotator;
 };
 

@@ -8,7 +8,6 @@
 #include "ArchVisPawnBase.generated.h"
 
 class UCameraComponent;
-class USpringArmComponent;
 
 /**
  * Enum for different pawn types in ArchVis
@@ -26,7 +25,7 @@ enum class EArchVisPawnType : uint8
 
 /**
  * Base pawn class for all ArchVis viewing modes.
- * Provides common camera functionality and interface for derived pawns.
+ * Provides minimal camera interface - derived classes implement specific navigation.
  */
 UCLASS(Abstract)
 class ARCHVIS_API AArchVisPawnBase : public APawn
@@ -38,27 +37,27 @@ public:
 
 	virtual void Tick(float DeltaTime) override;
 
-	// --- Camera Control Interface ---
+	// --- Camera Control Interface (pure virtual - must be implemented by derived classes) ---
 	
 	// Zoom in/out
 	UFUNCTION(BlueprintCallable, Category = "ArchVis|Camera")
-	virtual void Zoom(float Amount);
+	virtual void Zoom(float Amount) PURE_VIRTUAL(AArchVisPawnBase::Zoom, );
 
 	// Pan the camera
 	UFUNCTION(BlueprintCallable, Category = "ArchVis|Camera")
-	virtual void Pan(FVector2D Delta);
+	virtual void Pan(FVector2D Delta) PURE_VIRTUAL(AArchVisPawnBase::Pan, );
 
 	// Orbit around a point (3D modes only)
 	UFUNCTION(BlueprintCallable, Category = "ArchVis|Camera")
-	virtual void Orbit(FVector2D Delta);
+	virtual void Orbit(FVector2D Delta) {}
 
 	// Reset camera to default position
 	UFUNCTION(BlueprintCallable, Category = "ArchVis|Camera")
-	virtual void ResetView();
+	virtual void ResetView() PURE_VIRTUAL(AArchVisPawnBase::ResetView, );
 
 	// Focus on a world location
 	UFUNCTION(BlueprintCallable, Category = "ArchVis|Camera")
-	virtual void FocusOnLocation(FVector WorldLocation);
+	virtual void FocusOnLocation(FVector WorldLocation) PURE_VIRTUAL(AArchVisPawnBase::FocusOnLocation, );
 
 	// Get the pawn type
 	UFUNCTION(BlueprintCallable, Category = "ArchVis|Pawn")
@@ -66,27 +65,23 @@ public:
 
 	// Get the camera component
 	UFUNCTION(BlueprintCallable, Category = "ArchVis|Camera")
-	UCameraComponent* GetCameraComponent() const { return Camera; }
+	virtual UCameraComponent* GetCameraComponent() const PURE_VIRTUAL(AArchVisPawnBase::GetCameraComponent, return nullptr;);
 
 	// Get current camera world location
 	UFUNCTION(BlueprintCallable, Category = "ArchVis|Camera")
-	FVector GetCameraLocation() const;
+	virtual FVector GetCameraLocation() const PURE_VIRTUAL(AArchVisPawnBase::GetCameraLocation, return FVector::ZeroVector;);
 
 	// Get current camera world rotation
 	UFUNCTION(BlueprintCallable, Category = "ArchVis|Camera")
-	FRotator GetCameraRotation() const;
+	virtual FRotator GetCameraRotation() const PURE_VIRTUAL(AArchVisPawnBase::GetCameraRotation, return FRotator::ZeroRotator;);
 
 	// Set camera transform (used when switching pawns to preserve view)
 	UFUNCTION(BlueprintCallable, Category = "ArchVis|Camera")
-	virtual void SetCameraTransform(FVector Location, FRotator Rotation, float ZoomLevel);
+	virtual void SetCameraTransform(FVector Location, FRotator Rotation, float ZoomLevel) PURE_VIRTUAL(AArchVisPawnBase::SetCameraTransform, );
 
-	// Get current zoom level (arm length or ortho width depending on mode)
+	// Get current zoom level
 	UFUNCTION(BlueprintCallable, Category = "ArchVis|Camera")
-	virtual float GetZoomLevel() const;
-
-	// Get the target location for camera interpolation (for debug)
-	UFUNCTION(BlueprintCallable, Category = "ArchVis|Camera")
-	FVector GetPawnTargetLocation() const { return TargetLocation; }
+	virtual float GetZoomLevel() const PURE_VIRTUAL(AArchVisPawnBase::GetZoomLevel, return 0.0f;);
 
 protected:
 	virtual void BeginPlay() override;
@@ -99,41 +94,9 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
 	TObjectPtr<USceneComponent> RootScene;
 
-	// Spring arm for camera positioning
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
-	TObjectPtr<USpringArmComponent> SpringArm;
-
-	// The camera
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
-	TObjectPtr<UCameraComponent> Camera;
-
-	// --- Camera Settings ---
+	// --- Common Camera Settings ---
 	
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Settings")
-	float MinZoom = 500.0f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Settings")
-	float MaxZoom = 50000.0f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Settings")
-	float ZoomSpeed = 100.0f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Settings")
-	float PanSpeed = 2.0f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Settings")
-	float OrbitSpeed = 2.0f;
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Settings")
 	float InterpSpeed = 10.0f;
-
-	// --- Target State (for smooth interpolation) ---
-	
-	float TargetArmLength = 5000.0f;
-	FRotator TargetRotation = FRotator::ZeroRotator;
-	FVector TargetLocation = FVector::ZeroVector;
-
-	// Apply smooth interpolation to camera
-	virtual void InterpolateCameraState(float DeltaTime);
 };
 

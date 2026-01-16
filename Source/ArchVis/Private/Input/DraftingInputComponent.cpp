@@ -125,7 +125,7 @@ void UDraftingInputComponent::OnPanActionCompleted(const FInputActionValue& Valu
 void UDraftingInputComponent::OnZoom(const FInputActionValue& Value)
 {
 	const float ZoomAmount = Value.Get<float>();
-	
+
 	if (FMath::IsNearlyZero(ZoomAmount))
 	{
 		return;

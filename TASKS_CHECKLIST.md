@@ -35,7 +35,7 @@ Legend: [x] done, [-] partial, [ ] pending
 **Created Files:**
 - [x] `Source/ArchVis/Public/Input/ArchVisInputComponent.h/.cpp` - Abstract base
 - [x] `Source/ArchVis/Public/Input/DraftingInputComponent.h/.cpp` - 2D navigation
-- [x] `Source/ArchVis/Public/Input/OrbitInputComponent.h/.cpp` - 3D navigation  
+- [x] `Source/ArchVis/Public/Input/OrbitInputComponent.h/.cpp` - 3D navigation
 - [x] `Source/ArchVis/Public/Input/ToolInputComponent.h/.cpp` - Tool actions
 
 **Implementation Status:**

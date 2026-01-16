@@ -526,16 +526,9 @@ void AArchVisPlayerController::UpdateMouseLockState()
 	// Other navigation modes are handled by pawn input components which manage their own mouse state
 	bool bShouldLockMouse = bOrbitActive;
 	
-	UGameViewportClient* GameViewport = GetWorld() ? GetWorld()->GetGameViewport() : nullptr;
-	if (!GameViewport)
-	{
-		return;
-	}
-	
+	// Only show/hide cursor - DON'T change input mode as it disrupts Enhanced Input action tracking
 	if (bShouldLockMouse)
 	{
-		FInputModeGameOnly InputMode;
-		SetInputMode(InputMode);
 		SetShowMouseCursor(false);
 		
 		if (bInputDebugEnabled)
@@ -545,9 +538,6 @@ void AArchVisPlayerController::UpdateMouseLockState()
 	}
 	else
 	{
-		FInputModeGameAndUI InputMode;
-		InputMode.SetHideCursorDuringCapture(false);
-		SetInputMode(InputMode);
 		SetShowMouseCursor(true);
 		
 		if (bInputDebugEnabled)
@@ -712,20 +702,12 @@ void AArchVisPlayerController::OnSelectStarted(const FInputActionValue& Value)
 		UE_LOG(LogArchVisPC, Log, TEXT("OnSelectStarted: bAltDown=%d"), bAltDown);
 	}
 	
-	// If Alt is held, this is an orbit action, not a selection
+	// Note: Orbit handling (Alt + LMB) is now done via IA_Orbit action in OrbitInputComponent
+	// This OnSelectStarted is for tool selection only
+	
+	// If Alt is held, ignore this for tool selection (it's orbit mode)
 	if (bAltDown)
 	{
-		// Activate orbit mode on the pawn
-		if (AArchVisOrbitPawn* OrbitPawn = Cast<AArchVisOrbitPawn>(GetPawn()))
-		{
-			bOrbitActive = true;
-			OrbitPawn->SetOrbitModeActive(true);
-		}
-		// Update mouse lock for 3D navigation
-		if (CurrentInteractionMode == EArchVisInteractionMode::Navigation3D)
-		{
-			UpdateMouseLockState();
-		}
 		return;
 	}
 	
@@ -753,23 +735,10 @@ void AArchVisPlayerController::OnSelectCompleted(const FInputActionValue& Value)
 	
 	if (bInputDebugEnabled)
 	{
-		UE_LOG(LogArchVisPC, Log, TEXT("OnSelectCompleted: bOrbitActive=%d"), bOrbitActive);
+		UE_LOG(LogArchVisPC, Log, TEXT("OnSelectCompleted"));
 	}
 	
-	// End orbit mode if it was active
-	if (bOrbitActive)
-	{
-		bOrbitActive = false;
-		if (AArchVisOrbitPawn* OrbitPawn = Cast<AArchVisOrbitPawn>(GetPawn()))
-		{
-			OrbitPawn->SetOrbitModeActive(false);
-		}
-		// Update mouse lock for 3D navigation
-		if (CurrentInteractionMode == EArchVisInteractionMode::Navigation3D)
-		{
-			UpdateMouseLockState();
-		}
-	}
+	// Note: Orbit handling is done by OrbitInputComponent via IA_Orbit action
 }
 
 void AArchVisPlayerController::OnSelectAdd(const FInputActionValue& Value)

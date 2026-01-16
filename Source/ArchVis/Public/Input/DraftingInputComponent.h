@@ -33,7 +33,7 @@ protected:
 	virtual void RemoveInputMappingContexts() override;
 
 	// --- Navigation Handlers ---
-	
+
 	void OnPanActionStarted(const FInputActionValue& Value);
 	void OnPanActionCompleted(const FInputActionValue& Value);
 	void OnZoom(const FInputActionValue& Value);
@@ -47,7 +47,7 @@ private:
 	
 	// Last mouse position for delta calculation
 	FVector2D LastMousePosition = FVector2D::ZeroVector;
-	
+
 	// Process pan based on mouse delta
 	void ProcessPan(float DeltaTime);
 };

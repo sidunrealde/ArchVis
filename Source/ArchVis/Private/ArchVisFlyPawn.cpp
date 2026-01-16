@@ -2,18 +2,14 @@
 
 #include "ArchVisFlyPawn.h"
 #include "Camera/CameraComponent.h"
-#include "GameFramework/SpringArmComponent.h"
 
 AArchVisFlyPawn::AArchVisFlyPawn()
 {
 	PawnType = EArchVisPawnType::Fly;
 	
-	// Disable spring arm for fly pawn - camera is attached directly
-	if (SpringArm)
-	{
-		SpringArm->TargetArmLength = 0.0f;
-		SpringArm->bDoCollisionTest = false;
-	}
+	// Create camera directly attached to root (no spring arm)
+	Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
+	Camera->SetupAttachment(RootScene);
 }
 
 void AArchVisFlyPawn::BeginPlay()
@@ -27,22 +23,14 @@ void AArchVisFlyPawn::BeginPlay()
 		Camera->FieldOfView = 90.0f;
 	}
 
-	// Set spring arm to zero length (camera at pawn location)
-	if (SpringArm)
-	{
-		SpringArm->TargetArmLength = 0.0f;
-		TargetArmLength = 0.0f;
-	}
-
-	// Initialize rotation from current actor rotation
-	CurrentRotation = GetActorRotation();
-	TargetRotation = CurrentRotation;
+	// Initialize from current actor transform
+	TargetLocation = GetActorLocation();
+	TargetRotation = GetActorRotation();
 }
 
 void AArchVisFlyPawn::Tick(float DeltaTime)
 {
-	// Don't call Super::Tick - we handle movement ourselves
-	// Super interpolates spring arm which we don't want
+	Super::Tick(DeltaTime);
 
 	// Apply movement based on current input
 	if (!CurrentMovementInput.IsNearlyZero() || !FMath::IsNearlyZero(CurrentVerticalInput))
@@ -50,9 +38,8 @@ void AArchVisFlyPawn::Tick(float DeltaTime)
 		float Speed = bSpeedBoost ? FlySpeed * FastFlyMultiplier : FlySpeed;
 		
 		// Get forward and right vectors based on current rotation
-		FRotator YawRotation(0.0f, CurrentRotation.Yaw, 0.0f);
-		FVector Forward = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
-		FVector Right = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
+		FVector Forward = TargetRotation.Vector();
+		FVector Right = FRotationMatrix(TargetRotation).GetUnitAxis(EAxis::Y);
 		FVector Up = FVector::UpVector;
 
 		// Calculate movement direction
@@ -61,35 +48,33 @@ void AArchVisFlyPawn::Tick(float DeltaTime)
 		if (!MoveDirection.IsNearlyZero())
 		{
 			MoveDirection.Normalize();
-			FVector NewLocation = GetActorLocation() + MoveDirection * Speed * DeltaTime;
-			SetActorLocation(NewLocation);
+			TargetLocation += MoveDirection * Speed * DeltaTime;
 		}
 	}
 
-	// Smooth rotation interpolation
-	FRotator CurrentActorRotation = GetActorRotation();
-	FRotator NewRotation = FMath::RInterpTo(CurrentActorRotation, CurrentRotation, DeltaTime, 15.0f);
-	SetActorRotation(NewRotation);
-
-	// Update spring arm rotation (for camera)
-	if (SpringArm)
+	// Smooth interpolation
+	SetActorLocation(FMath::VInterpTo(GetActorLocation(), TargetLocation, DeltaTime, InterpSpeed));
+	
+	if (Camera)
 	{
-		SpringArm->SetRelativeRotation(FRotator::ZeroRotator);
+		FRotator CurrentRot = Camera->GetComponentRotation();
+		FRotator NewRot = FMath::RInterpTo(CurrentRot, TargetRotation, DeltaTime, InterpSpeed);
+		Camera->SetWorldRotation(NewRot);
 	}
 }
 
 void AArchVisFlyPawn::Look(FVector2D Delta)
 {
 	// Apply mouse look
-	CurrentRotation.Yaw += Delta.X * LookSensitivity;
-	CurrentRotation.Pitch = FMath::Clamp(CurrentRotation.Pitch + Delta.Y * LookSensitivity, -89.0f, 89.0f);
+	TargetRotation.Yaw += Delta.X * LookSensitivity;
+	TargetRotation.Pitch = FMath::Clamp(TargetRotation.Pitch - Delta.Y * LookSensitivity, -89.0f, 89.0f);
+	TargetRotation.Roll = 0.0f;
 }
 
 void AArchVisFlyPawn::Move(FVector Direction)
 {
 	float Speed = bSpeedBoost ? FlySpeed * FastFlyMultiplier : FlySpeed;
-	FVector NewLocation = GetActorLocation() + Direction * Speed * GetWorld()->GetDeltaSeconds();
-	SetActorLocation(NewLocation);
+	TargetLocation += Direction * Speed * GetWorld()->GetDeltaSeconds();
 }
 
 void AArchVisFlyPawn::SetMovementInput(FVector2D Input)
@@ -115,13 +100,11 @@ void AArchVisFlyPawn::Zoom(float Amount)
 void AArchVisFlyPawn::Pan(FVector2D Delta)
 {
 	// Pan moves the pawn in the camera plane
-	FRotator YawRotation(0.0f, CurrentRotation.Yaw, 0.0f);
-	FVector Right = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
-	FVector Up = FVector::UpVector;
+	FVector Right = FRotationMatrix(TargetRotation).GetUnitAxis(EAxis::Y);
+	FVector Up = FRotationMatrix(TargetRotation).GetUnitAxis(EAxis::Z);
 
-	FVector MoveDirection = Right * Delta.X + Up * -Delta.Y;
-	FVector NewLocation = GetActorLocation() + MoveDirection * PanSpeed;
-	SetActorLocation(NewLocation);
+	FVector MoveDirection = Right * -Delta.X + Up * Delta.Y;
+	TargetLocation += MoveDirection * PanSpeed;
 }
 
 void AArchVisFlyPawn::Orbit(FVector2D Delta)
@@ -132,11 +115,61 @@ void AArchVisFlyPawn::Orbit(FVector2D Delta)
 
 void AArchVisFlyPawn::ResetView()
 {
-	SetActorLocation(FVector::ZeroVector);
-	CurrentRotation = FRotator::ZeroRotator;
+	TargetLocation = FVector::ZeroVector;
+	TargetRotation = FRotator::ZeroRotator;
 	if (Camera)
 	{
 		Camera->FieldOfView = 90.0f;
 	}
+}
+
+void AArchVisFlyPawn::FocusOnLocation(FVector WorldLocation)
+{
+	// Look at the location
+	FVector Direction = WorldLocation - TargetLocation;
+	if (!Direction.IsNearlyZero())
+	{
+		TargetRotation = Direction.Rotation();
+	}
+}
+
+void AArchVisFlyPawn::SetCameraTransform(FVector Location, FRotator Rotation, float ZoomLevel)
+{
+	TargetLocation = Location;
+	TargetRotation = Rotation;
+	TargetRotation.Roll = 0.0f;
+	
+	if (Camera)
+	{
+		// ZoomLevel maps to FOV for fly pawn
+		Camera->FieldOfView = FMath::Clamp(ZoomLevel, 30.0f, 120.0f);
+	}
+}
+
+float AArchVisFlyPawn::GetZoomLevel() const
+{
+	if (Camera)
+	{
+		return Camera->FieldOfView;
+	}
+	return 90.0f;
+}
+
+FVector AArchVisFlyPawn::GetCameraLocation() const
+{
+	if (Camera)
+	{
+		return Camera->GetComponentLocation();
+	}
+	return GetActorLocation();
+}
+
+FRotator AArchVisFlyPawn::GetCameraRotation() const
+{
+	if (Camera)
+	{
+		return Camera->GetComponentRotation();
+	}
+	return TargetRotation;
 }
 
