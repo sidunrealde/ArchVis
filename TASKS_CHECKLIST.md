@@ -20,14 +20,47 @@ Legend: [x] done, [-] partial, [ ] pending
 - [x] Perspective orbit mode (`AArchVisOrbitPawn`).
 - [x] Toggle between 2D/3D pawns (`SwitchToPawnType()`).
 - [x] Pan + zoom on 2D pawn (AutoCAD-style).
-- [-] Pan + zoom on 3D pawn (needs fixing).
-- [-] Orbit controls on 3D pawn (Alt+LMB - needs fixing).
-- [-] Fly mode on 3D pawn (RMB+WASD - needs fixing).
+- [x] Pan + zoom on 3D pawn (via `UOrbitInputComponent`).
+- [x] Orbit controls on 3D pawn (Alt+LMB via `UOrbitInputComponent`).
+- [x] Fly mode on 3D pawn (RMB+WASD via `UOrbitInputComponent`).
 - [x] First-person walkthrough pawn (`AArchVisFirstPersonPawn`).
 - [x] Third-person walkthrough pawn (`AArchVisThirdPersonPawn`).
 - [x] Base pawn class with common camera interface (`AArchVisPawnBase`).
 - [x] Camera state transfer when switching pawns (`SetCameraTransform()`).
 - [x] Undo/Redo wired to Document (`OnUndo`, `OnRedo`).
+
+### 1.1b Modular Input Components (Refactored Jan 2026)
+**Architecture:** Pawn-centric input with components instead of monolithic controller.
+
+**Created Files:**
+- [x] `Source/ArchVis/Public/Input/ArchVisInputComponent.h/.cpp` - Abstract base
+- [x] `Source/ArchVis/Public/Input/DraftingInputComponent.h/.cpp` - 2D navigation
+- [x] `Source/ArchVis/Public/Input/OrbitInputComponent.h/.cpp` - 3D navigation  
+- [x] `Source/ArchVis/Public/Input/ToolInputComponent.h/.cpp` - Tool actions
+
+**Implementation Status:**
+- [x] `UArchVisInputComponent` - Abstract base class for pawn input components.
+- [x] `UDraftingInputComponent` - 2D pan/zoom input, attached to `AArchVisDraftingPawn`.
+- [x] `UOrbitInputComponent` - 3D orbit/pan/dolly/fly input, attached to `AArchVisOrbitPawn`.
+- [x] `UToolInputComponent` - Tool actions (draw/select), attached to `AArchVisPlayerController`.
+- [ ] `UFirstPersonInputComponent` - FPS movement, for `AArchVisFirstPersonPawn`.
+- [ ] `UThirdPersonInputComponent` - TPS camera/movement, for `AArchVisThirdPersonPawn`.
+
+**Integration:**
+- [x] Pawns create their own input components in constructor.
+- [x] Pawns override `PossessedBy()`/`UnPossessed()` to notify input components.
+- [x] Pawns call `InitializeInput()` with InputConfig from controller.
+- [x] Controller initializes pawn input in `BeginPlay()` and `SwitchToPawnType()`.
+- [x] Input components manage their own IMCs on possession/unpossession.
+- [x] Mouse lock/unlock handled per-pawn in `UpdateMouseLockState()`.
+
+**Cleanup (TODO):**
+- [ ] Remove redundant navigation handlers from `AArchVisPlayerController` (OnPan, OnPanDelta, OnOrbit, etc.)
+- [ ] Remove redundant Tick navigation logic from controller
+- [ ] Migrate remaining tool handlers from controller to `UToolInputComponent`
+- [ ] Remove `UpdateInputMappingContexts()` complexity from controller
+- [ ] Test 2D drafting with new `UDraftingInputComponent`
+- [ ] Test 3D navigation with new `UOrbitInputComponent`
 
 ### 1.2 HUD: full-screen crosshair cursor
 - [x] Crosshair lines (full screen).

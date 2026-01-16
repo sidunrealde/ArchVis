@@ -7,9 +7,16 @@
 #include "ArchVisPawnBase.h"
 #include "ArchVisDraftingPawn.generated.h"
 
+class UDraftingInputComponent;
+class UArchVisInputConfig;
+
 /**
  * 2D Drafting Pawn with top-down orthographic view.
  * Primary pawn for CAD-style wall editing.
+ * 
+ * Uses UDraftingInputComponent for input handling:
+ * - MMB: Pan
+ * - Scroll: Zoom
  */
 UCLASS()
 class ARCHVIS_API AArchVisDraftingPawn : public AArchVisPawnBase
@@ -25,8 +32,13 @@ public:
 	virtual void SetCameraTransform(FVector Location, FRotator Rotation, float ZoomLevel) override;
 	virtual float GetZoomLevel() const override;
 
+	// Initialize input with config
+	void InitializeInput(UArchVisInputConfig* InputConfig);
+
 protected:
 	virtual void BeginPlay() override;
+	virtual void PossessedBy(AController* NewController) override;
+	virtual void UnPossessed() override;
 
 	// Update ortho width based on zoom level
 	void UpdateOrthoWidth();
@@ -34,5 +46,9 @@ protected:
 	// Ortho width multiplier (ortho width = arm length * this value)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|2D")
 	float OrthoWidthMultiplier = 2.0f;
+
+	// Input component for 2D navigation
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Input")
+	TObjectPtr<UDraftingInputComponent> DraftingInput;
 };
 

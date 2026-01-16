@@ -1,6 +1,5 @@
 ﻿#include "ArchVisPlayerController.h"
 #include "ArchVisGameMode.h"
-#include "ArchVisCameraController.h"
 #include "ArchVisInputConfig.h"
 #include "ArchVisPawnBase.h"
 #include "ArchVisDraftingPawn.h"
@@ -8,6 +7,7 @@
 #include "ArchVisFlyPawn.h"
 #include "ArchVisFirstPersonPawn.h"
 #include "ArchVisThirdPersonPawn.h"
+#include "Input/ToolInputComponent.h"
 #include "RTPlanToolManager.h"
 #include "RTPlanToolBase.h"
 #include "Tools/RTPlanLineTool.h"
@@ -23,6 +23,9 @@ AArchVisPlayerController::AArchVisPlayerController()
 	bShowMouseCursor = false; 
 	bEnableClickEvents = true;
 	bEnableMouseOverEvents = true;
+
+	// Create tool input component for handling drawing/selection
+	ToolInput = CreateDefaultSubobject<UToolInputComponent>(TEXT("ToolInput"));
 }
 
 void AArchVisPlayerController::BeginPlay()
@@ -49,15 +52,17 @@ void AArchVisPlayerController::BeginPlay()
 	APawn* ExistingPawn = GetPawn();
 	if (ExistingPawn)
 	{
-		// Check if it's one of our ArchVis pawns
-		if (Cast<AArchVisDraftingPawn>(ExistingPawn))
+		// Check if it's one of our ArchVis pawns and initialize their input
+		if (AArchVisDraftingPawn* DraftingPawn = Cast<AArchVisDraftingPawn>(ExistingPawn))
 		{
 			CurrentPawnType = EArchVisPawnType::Drafting2D;
+			DraftingPawn->InitializeInput(InputConfig);
 			UE_LOG(LogArchVisPC, Log, TEXT("Using existing Drafting2D pawn"));
 		}
-		else if (Cast<AArchVisOrbitPawn>(ExistingPawn))
+		else if (AArchVisOrbitPawn* OrbitPawn = Cast<AArchVisOrbitPawn>(ExistingPawn))
 		{
 			CurrentPawnType = EArchVisPawnType::Orbit3D;
+			OrbitPawn->InitializeInput(InputConfig);
 			UE_LOG(LogArchVisPC, Log, TEXT("Using existing Orbit3D pawn"));
 		}
 		else if (Cast<AArchVisFlyPawn>(ExistingPawn))
@@ -87,6 +92,10 @@ void AArchVisPlayerController::BeginPlay()
 			{
 				Possess(NewDraftingPawn);
 				CurrentPawnType = EArchVisPawnType::Drafting2D;
+				if (AArchVisDraftingPawn* DPawn = Cast<AArchVisDraftingPawn>(NewDraftingPawn))
+				{
+					DPawn->InitializeInput(InputConfig);
+				}
 			}
 		}
 	}
@@ -98,16 +107,13 @@ void AArchVisPlayerController::BeginPlay()
 		{
 			Possess(NewDraftingPawn);
 			CurrentPawnType = EArchVisPawnType::Drafting2D;
+			if (AArchVisDraftingPawn* DPawn = Cast<AArchVisDraftingPawn>(NewDraftingPawn))
+			{
+				DPawn->InitializeInput(InputConfig);
+			}
 		}
 	}
 
-	// Legacy: Find Camera Controller (for backward compatibility)
-	TArray<AActor*> Cameras;
-	UGameplayStatics::GetAllActorsOfClass(this, AArchVisCameraController::StaticClass(), Cameras);
-	if (Cameras.Num() > 0)
-	{
-		CameraController = Cast<AArchVisCameraController>(Cameras[0]);
-	}
 
 	// Set up initial Input Mapping Contexts
 	UpdateInputMappingContexts();
@@ -204,83 +210,10 @@ void AArchVisPlayerController::SetupInputComponent()
 			EIC->BindAction(InputConfig->IA_ToolPolyline, ETriggerEvent::Started, this, &AArchVisPlayerController::OnToolPolylineHotkey);
 		}
 
-		// ============================================
-		// VIEW ACTIONS (IMC_2D_Base / IMC_3D_Base)
-		// ============================================
-		
-		if (InputConfig->IA_Pan)
-		{
-			EIC->BindAction(InputConfig->IA_Pan, ETriggerEvent::Started, this, &AArchVisPlayerController::OnPan);
-			EIC->BindAction(InputConfig->IA_Pan, ETriggerEvent::Completed, this, &AArchVisPlayerController::OnPan);
-		}
-		if (InputConfig->IA_PanDelta)
-		{
-			EIC->BindAction(InputConfig->IA_PanDelta, ETriggerEvent::Triggered, this, &AArchVisPlayerController::OnPanDelta);
-		}
-		if (InputConfig->IA_Zoom)
-		{
-			EIC->BindAction(InputConfig->IA_Zoom, ETriggerEvent::Triggered, this, &AArchVisPlayerController::OnZoom);
-		}
-		
-		// Fly pawn movement
-		if (InputConfig->IA_Move)
-		{
-			EIC->BindAction(InputConfig->IA_Move, ETriggerEvent::Triggered, this, &AArchVisPlayerController::OnMove);
-			EIC->BindAction(InputConfig->IA_Move, ETriggerEvent::Completed, this, &AArchVisPlayerController::OnMove);
-		}
-		if (InputConfig->IA_MoveUp)
-		{
-			EIC->BindAction(InputConfig->IA_MoveUp, ETriggerEvent::Triggered, this, &AArchVisPlayerController::OnMoveUp);
-			EIC->BindAction(InputConfig->IA_MoveUp, ETriggerEvent::Completed, this, &AArchVisPlayerController::OnMoveUp);
-		}
-		if (InputConfig->IA_MoveDown)
-		{
-			EIC->BindAction(InputConfig->IA_MoveDown, ETriggerEvent::Triggered, this, &AArchVisPlayerController::OnMoveDown);
-			EIC->BindAction(InputConfig->IA_MoveDown, ETriggerEvent::Completed, this, &AArchVisPlayerController::OnMoveDown);
-		}
-		if (InputConfig->IA_Look)
-		{
-			EIC->BindAction(InputConfig->IA_Look, ETriggerEvent::Triggered, this, &AArchVisPlayerController::OnLook);
-		}
-		
-		if (InputConfig->IA_Orbit)
-		{
-			EIC->BindAction(InputConfig->IA_Orbit, ETriggerEvent::Started, this, &AArchVisPlayerController::OnOrbit);
-			EIC->BindAction(InputConfig->IA_Orbit, ETriggerEvent::Completed, this, &AArchVisPlayerController::OnOrbit);
-		}
-		if (InputConfig->IA_OrbitDelta)
-		{
-			EIC->BindAction(InputConfig->IA_OrbitDelta, ETriggerEvent::Triggered, this, &AArchVisPlayerController::OnOrbitDelta);
-		}
-		if (InputConfig->IA_FlyMode)
-		{
-			EIC->BindAction(InputConfig->IA_FlyMode, ETriggerEvent::Started, this, &AArchVisPlayerController::OnFlyMode);
-			EIC->BindAction(InputConfig->IA_FlyMode, ETriggerEvent::Completed, this, &AArchVisPlayerController::OnFlyMode);
-		}
-		if (InputConfig->IA_DollyZoom)
-		{
-			EIC->BindAction(InputConfig->IA_DollyZoom, ETriggerEvent::Triggered, this, &AArchVisPlayerController::OnDollyZoom);
-		}
-		if (InputConfig->IA_ResetView)
-		{
-			EIC->BindAction(InputConfig->IA_ResetView, ETriggerEvent::Started, this, &AArchVisPlayerController::OnResetView);
-		}
-		if (InputConfig->IA_FocusSelection)
-		{
-			EIC->BindAction(InputConfig->IA_FocusSelection, ETriggerEvent::Started, this, &AArchVisPlayerController::OnFocusSelection);
-		}
-		if (InputConfig->IA_PointerPosition)
-		{
-			EIC->BindAction(InputConfig->IA_PointerPosition, ETriggerEvent::Triggered, this, &AArchVisPlayerController::OnPointerPosition);
-		}
-		if (InputConfig->IA_SnapToggle)
-		{
-			EIC->BindAction(InputConfig->IA_SnapToggle, ETriggerEvent::Started, this, &AArchVisPlayerController::OnSnapToggle);
-		}
-		if (InputConfig->IA_GridToggle)
-		{
-			EIC->BindAction(InputConfig->IA_GridToggle, ETriggerEvent::Started, this, &AArchVisPlayerController::OnGridToggle);
-		}
+		// NOTE: Navigation actions (Pan, Zoom, Orbit, Fly, etc.) are now handled by
+		// pawn-specific input components:
+		// - UDraftingInputComponent for 2D pan/zoom
+		// - UOrbitInputComponent for 3D orbit/pan/dolly/fly
 
 		// ============================================
 		// SELECTION ACTIONS (IMC_2D_Selection / IMC_3D_Selection)
@@ -412,25 +345,16 @@ void AArchVisPlayerController::SetupInputComponent()
 			EIC->BindAction(InputConfig->IA_NumericDivide, ETriggerEvent::Started, this, &AArchVisPlayerController::OnNumericDivide);
 		}
 
+
 		// ============================================
-		// 3D NAVIGATION ACTIONS (IMC_3D_Navigation)
+		// TOOL INPUT COMPONENT INITIALIZATION
 		// ============================================
-		
-		if (InputConfig->IA_ViewTop)
+		// The ToolInputComponent handles tool-specific actions (drawing, selection)
+		// that are pawn-agnostic. It's initialized here with the shared InputConfig.
+		if (ToolInput)
 		{
-			EIC->BindAction(InputConfig->IA_ViewTop, ETriggerEvent::Started, this, &AArchVisPlayerController::OnViewTop);
-		}
-		if (InputConfig->IA_ViewFront)
-		{
-			EIC->BindAction(InputConfig->IA_ViewFront, ETriggerEvent::Started, this, &AArchVisPlayerController::OnViewFront);
-		}
-		if (InputConfig->IA_ViewRight)
-		{
-			EIC->BindAction(InputConfig->IA_ViewRight, ETriggerEvent::Started, this, &AArchVisPlayerController::OnViewRight);
-		}
-		if (InputConfig->IA_ViewPerspective)
-		{
-			EIC->BindAction(InputConfig->IA_ViewPerspective, ETriggerEvent::Started, this, &AArchVisPlayerController::OnViewPerspective);
+			ToolInput->Initialize(InputConfig, EIC);
+			UE_LOG(LogArchVisPC, Log, TEXT("ToolInputComponent initialized"));
 		}
 	}
 }
@@ -596,6 +520,43 @@ void AArchVisPlayerController::ClearAllToolContexts()
 	ActiveToolIMC = nullptr;
 }
 
+void AArchVisPlayerController::UpdateMouseLockState()
+{
+	// Lock mouse during orbit (Alt + Select action) which is triggered via OnSelectStarted
+	// Other navigation modes are handled by pawn input components which manage their own mouse state
+	bool bShouldLockMouse = bOrbitActive;
+	
+	UGameViewportClient* GameViewport = GetWorld() ? GetWorld()->GetGameViewport() : nullptr;
+	if (!GameViewport)
+	{
+		return;
+	}
+	
+	if (bShouldLockMouse)
+	{
+		FInputModeGameOnly InputMode;
+		SetInputMode(InputMode);
+		SetShowMouseCursor(false);
+		
+		if (bInputDebugEnabled)
+		{
+			UE_LOG(LogArchVisPC, Log, TEXT("UpdateMouseLockState: Mouse LOCKED (orbit)"));
+		}
+	}
+	else
+	{
+		FInputModeGameAndUI InputMode;
+		InputMode.SetHideCursorDuringCapture(false);
+		SetInputMode(InputMode);
+		SetShowMouseCursor(true);
+		
+		if (bInputDebugEnabled)
+		{
+			UE_LOG(LogArchVisPC, Log, TEXT("UpdateMouseLockState: Mouse RELEASED"));
+		}
+	}
+}
+
 void AArchVisPlayerController::ActivateNumericEntryContext()
 {
 	if (!InputConfig || bNumericEntryContextActive) return;
@@ -619,21 +580,16 @@ void AArchVisPlayerController::SetInteractionMode(EArchVisInteractionMode NewMod
 {
 	if (CurrentInteractionMode != NewMode)
 	{
-		// Clear any sticky button/nav flags on mode transition.
-		bPanActive = false;
+		// Clear orbit state on mode transition
 		bOrbitActive = false;
-		bLMBDown = false;
-		bRMBDown = false;
-		bMMBDown = false;
-		CurrentMoveInput = FVector2D::ZeroVector;
-		CurrentVerticalMoveInput = 0.0f;
+		bSelectActionActive = false;
 
 		CurrentInteractionMode = NewMode;
 		UpdateInputMappingContexts();
 
 		if (bInputDebugEnabled)
 		{
-			UE_LOG(LogArchVisPC, Log, TEXT("SetInteractionMode -> %s (states cleared)"),
+			UE_LOG(LogArchVisPC, Log, TEXT("SetInteractionMode -> %s"),
 				(CurrentInteractionMode == EArchVisInteractionMode::Drafting2D) ? TEXT("2D") : TEXT("3D"));
 		}
 	}
@@ -656,40 +612,15 @@ void AArchVisPlayerController::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	// Get current mouse position
+	// Update virtual cursor position (for HUD crosshair)
 	float MouseX, MouseY;
 	if (GetMousePosition(MouseX, MouseY))
 	{
-		FVector2D NewMousePos(MouseX, MouseY);
-
-		// Calculate mouse delta
-		FVector2D MouseDelta = NewMousePos - LastMousePosition;
-
-		// Robust 2D pan fallback: if MMB is down and we're in 2D, pan using raw mouse delta.
-		// This covers cases where Enhanced Input chorded axis (IA_PanDelta) stops firing due to IMC layering/consumption.
-		if (CurrentInteractionMode == EArchVisInteractionMode::Drafting2D && bPanActive && MouseDelta.SizeSquared() > 0.01f)
-		{
-			if (AArchVisPawnBase* ArchVisPawn = GetArchVisPawn())
-			{
-				DebugLogInputSnapshot(TEXT("Tick2DPan"), MouseDelta);
-				ArchVisPawn->Pan(MouseDelta);
-			}
-			else if (CameraController)
-			{
-				DebugLogInputSnapshot(TEXT("Tick2DPan_Legacy"), MouseDelta);
-				CameraController->Pan(MouseDelta);
-			}
-		}
-
-		// IMPORTANT: 3D navigation is handled via Enhanced Input actions (OnPanDelta/OnOrbitDelta/OnLook)
-		// to avoid double-applying deltas and to ensure consistent behaviour across click/hold cycles.
-
-		// Update virtual cursor position (for 2D mode crosshair)
-		VirtualCursorPos = NewMousePos;
-		LastMousePosition = NewMousePos;
+		VirtualCursorPos = FVector2D(MouseX, MouseY);
+		LastMousePosition = VirtualCursorPos;
 	}
 
-	// Handle backspace key repeat
+	// Handle backspace key repeat for numeric input
 	if (bBackspaceHeld)
 	{
 		BackspaceHoldTime += DeltaTime;
@@ -698,7 +629,6 @@ void AArchVisPlayerController::Tick(float DeltaTime)
 		{
 			if (!NumericInputBuffer.Buffer.IsEmpty())
 			{
-				// Buffer has content - perform numeric backspace
 				PerformBackspace();
 			}
 			else
@@ -718,7 +648,6 @@ void AArchVisPlayerController::Tick(float DeltaTime)
 					}
 				}
 			}
-			// After initial delay, use faster repeat rate
 			BackspaceNextRepeatTime = BackspaceHoldTime + BackspaceRepeatRate;
 		}
 	}
@@ -729,7 +658,7 @@ void AArchVisPlayerController::Tick(float DeltaTime)
 		return;
 	}
 
-	// Check if tool still has numeric input active
+	// Send move event to active tool
 	if (AArchVisGameMode* GM = Cast<AArchVisGameMode>(UGameplayStatics::GetGameMode(this)))
 	{
 		if (URTPlanToolManager* ToolMgr = GM->GetToolManager())
@@ -742,339 +671,15 @@ void AArchVisPlayerController::Tick(float DeltaTime)
 				}
 			}
 			
-			// Send move event
 			ToolMgr->ProcessInput(GetPointerEvent(ERTPointerAction::Move));
 		}
 	}
 }
 
 // ============================================
-// VIEW HANDLERS
+// GLOBAL HANDLERS
 // ============================================
 
-void AArchVisPlayerController::OnPan(const FInputActionValue& Value)
-{
-	const bool bDown = Value.Get<bool>();
-
-	// In 2D, we use bPanActive to gate panning.
-	// In 3D, we want pan to be driven strictly by actual MMB state (bMMBDown), so it never gets "stuck".
-	if (CurrentInteractionMode == EArchVisInteractionMode::Drafting2D)
-	{
-		bPanActive = bDown;
-	}
-
-	bMMBDown = bDown;
-
-	if (bInputDebugEnabled)
-	{
-		UE_LOG(LogArchVisPC, Log, TEXT("OnPan (MMB): %s  Mode=%s  bPanActive=%d  bMMBDown=%d"),
-			bDown ? TEXT("Down") : TEXT("Up"),
-			(CurrentInteractionMode == EArchVisInteractionMode::Drafting2D) ? TEXT("2D") : TEXT("3D"),
-			bPanActive ? 1 : 0,
-			bMMBDown ? 1 : 0);
-	}
-}
-
-void AArchVisPlayerController::OnPanDelta(const FInputActionValue& Value)
-{
-	const FVector2D Delta = Value.Get<FVector2D>();
-
-	if (bInputDebugEnabled)
-	{
-		UE_LOG(LogArchVisPC, Log, TEXT("OnPanDelta: Mode=%s  bPanActive=%d  bMMBDown=%d  Delta=%s"),
-			(CurrentInteractionMode == EArchVisInteractionMode::Drafting2D) ? TEXT("2D") : TEXT("3D"),
-			bPanActive ? 1 : 0,
-			bMMBDown ? 1 : 0,
-			*Delta.ToString());
-	}
-
-	// Gate by explicit action held-state.
-	// If IA_Pan is not held, do nothing (prevents any "sticky"/unexpected panning in 3D).
-	if (!bMMBDown)
-	{
-		return;
-	}
-
-	if (AArchVisPawnBase* ArchVisPawn = GetArchVisPawn())
-	{
-		ArchVisPawn->Pan(Delta);
-	}
-	else if (CameraController)
-	{
-		CameraController->Pan(Delta);
-	}
-}
-
-void AArchVisPlayerController::OnZoom(const FInputActionValue& Value)
-{
-	float Scroll = Value.Get<float>();
-	if (Scroll == 0.0f) return;
-	
-	UE_LOG(LogArchVisPC, Log, TEXT("OnZoom: %f"), Scroll);
-	
-	// Try new pawn system first
-	if (AArchVisPawnBase* ArchVisPawn = GetArchVisPawn())
-	{
-		UE_LOG(LogArchVisPC, Log, TEXT("OnZoom: Calling Pawn->Zoom on %s"), *ArchVisPawn->GetClass()->GetName());
-		ArchVisPawn->Zoom(Scroll);
-	}
-	else if (CameraController)
-	{
-		UE_LOG(LogArchVisPC, Log, TEXT("OnZoom: Using CameraController fallback"));
-		CameraController->Zoom(Scroll);
-	}
-	else
-	{
-		UE_LOG(LogArchVisPC, Warning, TEXT("OnZoom: No pawn or camera controller found!"));
-	}
-}
-
-void AArchVisPlayerController::OnOrbit(const FInputActionValue& Value)
-{
-	bOrbitActive = Value.Get<bool>();
-	UE_LOG(LogArchVisPC, Log, TEXT("OnOrbit: %s"), bOrbitActive ? TEXT("Started") : TEXT("Ended"));
-}
-
-void AArchVisPlayerController::OnOrbitDelta(const FInputActionValue& Value)
-{
-	if (!bOrbitActive) return;
-	
-	FVector2D Delta = Value.Get<FVector2D>();
-	
-	UE_LOG(LogArchVisPC, Log, TEXT("OnOrbitDelta: Delta=%s"), *Delta.ToString());
-	
-	// Try new pawn system first
-	if (AArchVisPawnBase* ArchVisPawn = GetArchVisPawn())
-	{
-		ArchVisPawn->Orbit(Delta);
-	}
-}
-
-void AArchVisPlayerController::OnFlyMode(const FInputActionValue& Value)
-{
-	bool bActive = Value.Get<bool>();
-	bRMBDown = bActive;
-
-	UE_LOG(LogArchVisPC, Log, TEXT("OnFlyMode: %s"), bActive ? TEXT("Started") : TEXT("Ended"));
-	
-	// Route to Orbit pawn for fly mode
-	if (AArchVisOrbitPawn* OrbitPawn = Cast<AArchVisOrbitPawn>(GetPawn()))
-	{
-		OrbitPawn->SetFlyModeActive(bActive);
-	}
-}
-
-void AArchVisPlayerController::OnDollyZoom(const FInputActionValue& Value)
-{
-	float Amount = Value.Get<float>();
-	
-	// Route to Orbit pawn for dolly zoom
-	if (AArchVisOrbitPawn* OrbitPawn = Cast<AArchVisOrbitPawn>(GetPawn()))
-	{
-		OrbitPawn->DollyZoom(Amount);
-	}
-}
-
-void AArchVisPlayerController::OnResetView(const FInputActionValue& Value)
-{
-	// Try new pawn system first
-	if (AArchVisPawnBase* ArchVisPawn = GetArchVisPawn())
-	{
-		ArchVisPawn->ResetView();
-	}
-	else if (CameraController)
-	{
-		// Fallback to legacy camera controller
-		CameraController->ResetView();
-	}
-}
-
-void AArchVisPlayerController::OnMove(const FInputActionValue& Value)
-{
-	FVector2D Input = Value.Get<FVector2D>();
-	
-	// Store the input for continuous movement
-	CurrentMoveInput = Input;
-	
-	static int32 MoveLogCount = 0;
-	if (MoveLogCount < 5)
-	{
-		UE_LOG(LogArchVisPC, Log, TEXT("OnMove: Input=%s"), *Input.ToString());
-		MoveLogCount++;
-	}
-	
-	// Route to Orbit pawn (only when fly mode is active via RMB)
-	if (AArchVisOrbitPawn* OrbitPawn = Cast<AArchVisOrbitPawn>(GetPawn()))
-	{
-		if (OrbitPawn->IsFlyModeActive())
-		{
-			OrbitPawn->SetMovementInput(Input);
-		}
-	}
-	// Route to Fly pawn (always active)
-	else if (AArchVisFlyPawn* FlyPawn = Cast<AArchVisFlyPawn>(GetPawn()))
-	{
-		FlyPawn->SetMovementInput(Input);
-	}
-	// For first/third person, use AddMovementInput
-	else if (AArchVisFirstPersonPawn* FPPawn = Cast<AArchVisFirstPersonPawn>(GetPawn()))
-	{
-		FPPawn->Move(Input);
-	}
-	else if (AArchVisThirdPersonPawn* TPPawn = Cast<AArchVisThirdPersonPawn>(GetPawn()))
-	{
-		TPPawn->Move(Input);
-	}
-}
-
-void AArchVisPlayerController::OnMoveUp(const FInputActionValue& Value)
-{
-	float Input = Value.Get<float>();
-	CurrentVerticalMoveInput = Input;
-	
-	// Route to Orbit pawn (only when fly mode active)
-	if (AArchVisOrbitPawn* OrbitPawn = Cast<AArchVisOrbitPawn>(GetPawn()))
-	{
-		if (OrbitPawn->IsFlyModeActive())
-		{
-			OrbitPawn->SetVerticalInput(Input);
-		}
-	}
-	else if (AArchVisFlyPawn* FlyPawn = Cast<AArchVisFlyPawn>(GetPawn()))
-	{
-		FlyPawn->SetVerticalInput(Input);
-	}
-}
-
-void AArchVisPlayerController::OnMoveDown(const FInputActionValue& Value)
-{
-	float Input = Value.Get<float>();
-	CurrentVerticalMoveInput = -Input;
-	
-	// Route to Orbit pawn (only when fly mode active)
-	if (AArchVisOrbitPawn* OrbitPawn = Cast<AArchVisOrbitPawn>(GetPawn()))
-	{
-		if (OrbitPawn->IsFlyModeActive())
-		{
-			OrbitPawn->SetVerticalInput(-Input);
-		}
-	}
-	else if (AArchVisFlyPawn* FlyPawn = Cast<AArchVisFlyPawn>(GetPawn()))
-	{
-		FlyPawn->SetVerticalInput(-Input);
-	}
-}
-
-void AArchVisPlayerController::OnLook(const FInputActionValue& Value)
-{
-	FVector2D Delta = Value.Get<FVector2D>();
-	
-	static int32 LookLogCount = 0;
-	if (LookLogCount < 5)
-	{
-		UE_LOG(LogArchVisPC, Log, TEXT("OnLook: Delta=%s"), *Delta.ToString());
-		LookLogCount++;
-	}
-	
-	// Route to Orbit pawn (when in fly mode)
-	if (AArchVisOrbitPawn* OrbitPawn = Cast<AArchVisOrbitPawn>(GetPawn()))
-	{
-		if (OrbitPawn->IsFlyModeActive())
-		{
-			OrbitPawn->Look(Delta);
-		}
-	}
-	// Route to Fly pawn
-	else if (AArchVisFlyPawn* FlyPawn = Cast<AArchVisFlyPawn>(GetPawn()))
-	{
-		FlyPawn->Look(Delta);
-	}
-	// For first/third person pawns
-	else if (AArchVisFirstPersonPawn* FPPawn = Cast<AArchVisFirstPersonPawn>(GetPawn()))
-	{
-		FPPawn->Look(Delta);
-	}
-	else if (AArchVisThirdPersonPawn* TPPawn = Cast<AArchVisThirdPersonPawn>(GetPawn()))
-	{
-		TPPawn->Look(Delta);
-	}
-}
-
-void AArchVisPlayerController::OnFocusSelection(const FInputActionValue& Value)
-{
-	// Focus on selection or on point under cursor
-	if (AArchVisGameMode* GM = Cast<AArchVisGameMode>(UGameplayStatics::GetGameMode(this)))
-	{
-		if (URTPlanToolManager* ToolMgr = GM->GetToolManager())
-		{
-			// Get selection bounds
-			// For now, focus on the point under the cursor
-			FVector WorldLoc, WorldDir;
-			if (DeprojectScreenPositionToWorld(VirtualCursorPos.X, VirtualCursorPos.Y, WorldLoc, WorldDir))
-			{
-				// Trace to ground plane
-				float T = -WorldLoc.Z / WorldDir.Z;
-				if (T > 0)
-				{
-					FVector GroundPoint = WorldLoc + WorldDir * T;
-					
-					if (AArchVisPawnBase* ArchVisPawn = GetArchVisPawn())
-					{
-						ArchVisPawn->FocusOnLocation(GroundPoint);
-						UE_LOG(LogArchVisPC, Log, TEXT("Focus on location: %s"), *GroundPoint.ToString());
-					}
-				}
-			}
-		}
-	}
-}
-
-void AArchVisPlayerController::OnPointerPosition(const FInputActionValue& Value)
-{
-	const FVector2D RawDelta = Value.Get<FVector2D>();
-	const FVector2D ScaledDelta = RawDelta * MouseSensitivity;
-
-	// Debug: Log first few pointer position updates
-	static int32 PointerLogCount = 0;
-	if (PointerLogCount < 5)
-	{
-		UE_LOG(LogArchVisPC, Log, TEXT("OnPointerPosition: RawDelta=%s, Scaled=%s"), *RawDelta.ToString(), *ScaledDelta.ToString());
-		PointerLogCount++;
-	}
-
-	// Update Virtual Cursor
-	VirtualCursorPos.X += ScaledDelta.X;
-	VirtualCursorPos.Y -= ScaledDelta.Y;
-
-	// Clamp to Viewport
-	int32 SizeX, SizeY;
-	GetViewportSize(SizeX, SizeY);
-	VirtualCursorPos.X = FMath::Clamp(VirtualCursorPos.X, 0.0f, (float)SizeX);
-	VirtualCursorPos.Y = FMath::Clamp(VirtualCursorPos.Y, 0.0f, (float)SizeY);
-
-	// Clear numeric input if mouse moves significantly
-	if (NumericInputBuffer.bIsActive && !NumericInputBuffer.Buffer.IsEmpty())
-	{
-		if (RawDelta.Size() > 1.0f)
-		{
-			NumericInputBuffer.Clear();
-			// Don't deactivate numeric entry context for drawing tools
-			// so user can continue entering digits after moving the mouse
-			
-			if (AArchVisGameMode* GM = Cast<AArchVisGameMode>(UGameplayStatics::GetGameMode(this)))
-			{
-				if (URTPlanToolManager* ToolMgr = GM->GetToolManager())
-				{
-					if (URTPlanLineTool* LineTool = Cast<URTPlanLineTool>(ToolMgr->GetActiveTool()))
-					{
-						LineTool->ClearNumericInputOverride();
-					}
-					ToolMgr->ProcessInput(GetPointerEvent(ERTPointerAction::Move));
-				}
-			}
-		}
-	}
-}
 
 void AArchVisPlayerController::OnSnapToggle(const FInputActionValue& Value)
 {
@@ -1100,11 +705,27 @@ void AArchVisPlayerController::OnToggleView(const FInputActionValue& Value)
 
 void AArchVisPlayerController::OnSelectStarted(const FInputActionValue& Value)
 {
-	bLMBDown = true;
+	bSelectActionActive = true;
 	
-	// Don't process selection if Alt is held (we're orbiting)
+	if (bInputDebugEnabled)
+	{
+		UE_LOG(LogArchVisPC, Log, TEXT("OnSelectStarted: bAltDown=%d"), bAltDown);
+	}
+	
+	// If Alt is held, this is an orbit action, not a selection
 	if (bAltDown)
 	{
+		// Activate orbit mode on the pawn
+		if (AArchVisOrbitPawn* OrbitPawn = Cast<AArchVisOrbitPawn>(GetPawn()))
+		{
+			bOrbitActive = true;
+			OrbitPawn->SetOrbitModeActive(true);
+		}
+		// Update mouse lock for 3D navigation
+		if (CurrentInteractionMode == EArchVisInteractionMode::Navigation3D)
+		{
+			UpdateMouseLockState();
+		}
 		return;
 	}
 	
@@ -1113,9 +734,13 @@ void AArchVisPlayerController::OnSelectStarted(const FInputActionValue& Value)
 		if (URTPlanToolManager* ToolMgr = GM->GetToolManager())
 		{
 			URTPlanToolBase* ActiveTool = ToolMgr->GetActiveTool();
-			UE_LOG(LogArchVisPC, Log, TEXT("OnSelectStarted: ActiveTool=%s, ToolType=%d"), 
-				ActiveTool ? *ActiveTool->GetClass()->GetName() : TEXT("NULL"),
-				static_cast<int32>(ToolMgr->GetActiveToolType()));
+			
+			if (bInputDebugEnabled)
+			{
+				UE_LOG(LogArchVisPC, Log, TEXT("OnSelectStarted: ActiveTool=%s, ToolType=%d"), 
+					ActiveTool ? *ActiveTool->GetClass()->GetName() : TEXT("NULL"),
+					static_cast<int32>(ToolMgr->GetActiveToolType()));
+			}
 			
 			ToolMgr->ProcessInput(GetPointerEvent(ERTPointerAction::Down));
 		}
@@ -1124,7 +749,27 @@ void AArchVisPlayerController::OnSelectStarted(const FInputActionValue& Value)
 
 void AArchVisPlayerController::OnSelectCompleted(const FInputActionValue& Value)
 {
-	bLMBDown = false;
+	bSelectActionActive = false;
+	
+	if (bInputDebugEnabled)
+	{
+		UE_LOG(LogArchVisPC, Log, TEXT("OnSelectCompleted: bOrbitActive=%d"), bOrbitActive);
+	}
+	
+	// End orbit mode if it was active
+	if (bOrbitActive)
+	{
+		bOrbitActive = false;
+		if (AArchVisOrbitPawn* OrbitPawn = Cast<AArchVisOrbitPawn>(GetPawn()))
+		{
+			OrbitPawn->SetOrbitModeActive(false);
+		}
+		// Update mouse lock for 3D navigation
+		if (CurrentInteractionMode == EArchVisInteractionMode::Navigation3D)
+		{
+			UpdateMouseLockState();
+		}
+	}
 }
 
 void AArchVisPlayerController::OnSelectAdd(const FInputActionValue& Value)
@@ -1769,13 +1414,32 @@ void AArchVisPlayerController::OnModifierShiftCompleted(const FInputActionValue&
 void AArchVisPlayerController::OnModifierAltStarted(const FInputActionValue& Value)
 {
 	bAltDown = true;
-	UE_LOG(LogArchVisPC, Log, TEXT("Alt Started - bAltDown=true"));
+	
+	if (bInputDebugEnabled)
+	{
+		UE_LOG(LogArchVisPC, Log, TEXT("IA_ModifierAlt Started - bAltDown=true Select=%d"), bSelectActionActive);
+	}
 }
 
 void AArchVisPlayerController::OnModifierAltCompleted(const FInputActionValue& Value)
 {
 	bAltDown = false;
-	UE_LOG(LogArchVisPC, Log, TEXT("Alt Ended - bAltDown=false"));
+	
+	if (bInputDebugEnabled)
+	{
+		UE_LOG(LogArchVisPC, Log, TEXT("IA_ModifierAlt Ended - bAltDown=false Select=%d"), bSelectActionActive);
+	}
+	
+	// End orbit if it was active (Alt + Select action)
+	if (bOrbitActive)
+	{
+		bOrbitActive = false;
+		if (AArchVisOrbitPawn* OrbitPawn = Cast<AArchVisOrbitPawn>(GetPawn()))
+		{
+			OrbitPawn->SetOrbitModeActive(false);
+		}
+		UpdateMouseLockState();
+	}
 }
 
 // ============================================
@@ -1789,14 +1453,9 @@ void AArchVisPlayerController::SwitchToPawnType(EArchVisPawnType NewPawnType)
 		return;
 	}
 
-	// Clear any sticky input state before switching pawns.
-	bPanActive = false;
+	// Clear orbit state before switching pawns
 	bOrbitActive = false;
-	bLMBDown = false;
-	bRMBDown = false;
-	bMMBDown = false;
-	CurrentMoveInput = FVector2D::ZeroVector;
-	CurrentVerticalMoveInput = 0.0f;
+	bSelectActionActive = false;
 
 	// Get current camera state to transfer to new pawn
 	FVector CurrentLocation = FVector::ZeroVector;
@@ -1831,6 +1490,16 @@ void AArchVisPlayerController::SwitchToPawnType(EArchVisPawnType NewPawnType)
 
 		// Possess new pawn
 		Possess(NewPawn);
+		
+		// Initialize pawn's input component with our InputConfig
+		if (AArchVisDraftingPawn* DraftingPawn = Cast<AArchVisDraftingPawn>(NewPawn))
+		{
+			DraftingPawn->InitializeInput(InputConfig);
+		}
+		else if (AArchVisOrbitPawn* OrbitPawn = Cast<AArchVisOrbitPawn>(NewPawn))
+		{
+			OrbitPawn->InitializeInput(InputConfig);
+		}
 		
 		// Transfer camera state
 		if (AArchVisPawnBase* ArchVisPawn = Cast<AArchVisPawnBase>(NewPawn))
@@ -1959,60 +1628,24 @@ void AArchVisPlayerController::ArchVisToggleInputDebug()
 {
 	bInputDebugEnabled = !bInputDebugEnabled;
 	UE_LOG(LogArchVisPC, Log, TEXT("Input debug: %s"), bInputDebugEnabled ? TEXT("ON") : TEXT("OFF"));
+	
+	// Sync with pawn debug flag
+	if (AArchVisOrbitPawn* OrbitPawn = Cast<AArchVisOrbitPawn>(GetPawn()))
+	{
+		OrbitPawn->SetDebugEnabled(bInputDebugEnabled);
+	}
 }
 
 void AArchVisPlayerController::ArchVisSetInputDebug(int32 bEnabled)
 {
 	bInputDebugEnabled = (bEnabled != 0);
 	UE_LOG(LogArchVisPC, Log, TEXT("Input debug: %s"), bInputDebugEnabled ? TEXT("ON") : TEXT("OFF"));
-}
-
-AArchVisPlayerController::FNav3DState AArchVisPlayerController::GetNav3DState() const
-{
-	FNav3DState S;
-	S.bPan = bMMBDown;
-	S.bOrbit = bAltDown && bLMBDown;
-	S.bFly = bRMBDown;
-	S.bDolly = bAltDown && bRMBDown;
-	return S;
-}
-
-void AArchVisPlayerController::DebugLogInputSnapshot(const TCHAR* Context, const FVector2D& MouseDelta) const
-{
-	if (!bInputDebugEnabled)
+	
+	// Sync with pawn debug flag
+	if (AArchVisOrbitPawn* OrbitPawn = Cast<AArchVisOrbitPawn>(GetPawn()))
 	{
-		return;
+		OrbitPawn->SetDebugEnabled(bInputDebugEnabled);
 	}
-
-	UE_LOG(LogArchVisPC, Log, TEXT("[%s] Mode=%s Pawn=%s Alt=%d Ctrl=%d Shift=%d LMB=%d MMB=%d RMB=%d PanActive=%d OrbitActive=%d MouseDelta=%s"),
-		Context,
-		(CurrentInteractionMode == EArchVisInteractionMode::Drafting2D) ? TEXT("2D") : TEXT("3D"),
-		GetPawn() ? *GetPawn()->GetClass()->GetName() : TEXT("NULL"),
-		bAltDown ? 1 : 0,
-		bCtrlDown ? 1 : 0,
-		bShiftDown ? 1 : 0,
-		bLMBDown ? 1 : 0,
-		bMMBDown ? 1 : 0,
-		bRMBDown ? 1 : 0,
-		bPanActive ? 1 : 0,
-		bOrbitActive ? 1 : 0,
-		*MouseDelta.ToString());
 }
 
-void AArchVisPlayerController::DebugLogNavState(const TCHAR* Context, const FVector2D& MouseDelta) const
-{
-	if (!bInputDebugEnabled)
-	{
-		return;
-	}
-
-	const FNav3DState Nav = GetNav3DState();
-	UE_LOG(LogArchVisPC, Log, TEXT("[%s] Nav3D: Pan=%d Orbit=%d Fly=%d Dolly=%d MouseDelta=%s"),
-		Context,
-		Nav.bPan ? 1 : 0,
-		Nav.bOrbit ? 1 : 0,
-		Nav.bFly ? 1 : 0,
-		Nav.bDolly ? 1 : 0,
-		*MouseDelta.ToString());
-}
 

@@ -13,7 +13,7 @@ void AArchVisHUD::DrawHUD()
 
 	if (!Canvas) return;
 
-	FVector2D CrosshairPos;
+	FVector2D CrosshairPos = FVector2D::ZeroVector;
 	bool bShouldDraw = false;
 	FRTDraftingState DraftState;
 	FRTNumericInputBuffer InputBuffer;

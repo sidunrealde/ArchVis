@@ -32,13 +32,60 @@
 |-----------|--------|
 | `AArchVisGameMode` | ✅ Creates Document, ToolManager, ShellActor, NetDriver |
 | `AArchVisPlayerController` | ✅ Enhanced Input, Virtual Cursor, Pawn Switching, Undo/Redo |
-| `AArchVisCameraController` | ⚠️ Legacy - Replaced by Pawn system |
 | `AArchVisPawnBase` | ✅ Base pawn with camera controls |
-| `AArchVisDraftingPawn` | ✅ 2D Top-down orthographic drafting |
-| `AArchVisOrbitPawn` | ✅ 3D Perspective orbit camera |
+| `AArchVisDraftingPawn` | ✅ 2D Top-down orthographic drafting (uses UDraftingInputComponent) |
+| `AArchVisOrbitPawn` | ✅ 3D Perspective orbit camera (uses UOrbitInputComponent) |
 | `AArchVisFirstPersonPawn` | ✅ First-person walkthrough character |
 | `AArchVisThirdPersonPawn` | ✅ Third-person walkthrough character |
 | `AArchVisHUD` | ✅ Crosshair, Wall Preview, Measurements, Length/Angle Labels |
+
+### Modular Input Components (`Source/ArchVis/Public/Input/`)
+| Component | Status | Description |
+|-----------|--------|-------------|
+| `UArchVisInputComponent` | ✅ Base | Abstract base for pawn-specific input handling |
+| `UDraftingInputComponent` | ✅ Done | 2D pan/zoom - attached to DraftingPawn |
+| `UOrbitInputComponent` | ✅ Done | 3D orbit/pan/dolly/fly - attached to OrbitPawn |
+| `UToolInputComponent` | ✅ Done | Tool actions (draw/select) - attached to Controller |
+| `UFirstPersonInputComponent` | ⏳ TODO | FPS movement - for FirstPersonPawn |
+| `UThirdPersonInputComponent` | ⏳ TODO | TPS camera/movement - for ThirdPersonPawn |
+
+### Modular Input Architecture (Refactored Jan 2026)
+
+The input system was refactored from a **monolithic PlayerController** to a **pawn-centric modular architecture** using Unreal's Enhanced Input system.
+
+**Key Principles:**
+1. **Pawn owns its navigation input** - Each pawn type has its own input component that handles navigation (pan/zoom/orbit/fly)
+2. **Controller handles tool input** - Tool interactions (drawing, selection) stay on the controller since they're pawn-agnostic
+3. **IMCs managed by components** - Each input component adds/removes its own IMCs on possession/unpossession
+4. **No shared input handlers** - Each pawn type has dedicated handlers, eliminating "if mode == 2D else 3D" branching
+
+**Architecture:**
+```
+AArchVisPlayerController
+├── UToolInputComponent (tool actions, selection)
+├── Global IMC (undo/redo/escape/modifiers)
+└── Numeric input buffer
+
+AArchVisDraftingPawn
+├── UDraftingInputComponent
+│   ├── IMC_2DBase
+│   └── Handlers: OnPan, OnZoom, OnPointerMove
+└── Camera controls (orthographic)
+
+AArchVisOrbitPawn
+├── UOrbitInputComponent
+│   ├── IMC_3DBase, IMC_3DNavigation
+│   └── Handlers: OnLMB, OnRMB, OnMMB, OnAlt, OnZoom, OnMove
+│   └── ProcessMouseNavigation() in Tick
+└── Camera controls (perspective, orbit, fly)
+```
+
+**Benefits:**
+- Clean separation of concerns
+- Easy to add new pawn types (just create new input component)
+- Input handlers live close to the pawn they control
+- Mouse lock/unlock managed per-pawn
+- Eliminates complex mode-switching logic in controller
 
 ---
 

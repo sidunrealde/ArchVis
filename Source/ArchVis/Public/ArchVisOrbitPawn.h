@@ -7,14 +7,19 @@
 #include "ArchVisPawnBase.h"
 #include "ArchVisOrbitPawn.generated.h"
 
+class UOrbitInputComponent;
+class UArchVisInputConfig;
+
 /**
  * 3D Orbit Pawn with perspective view.
  * Supports Unreal Editor-style navigation:
- * - Alt + LMB: Orbit around target
- * - MMB: Pan
- * - Alt + RMB: Zoom (dolly)
- * - RMB + WASD/QE: Fly movement with mouselook
+ * - Alt + Select: Orbit around target
+ * - Pan action: Pan camera
+ * - Alt + FlyMode: Dolly zoom
+ * - FlyMode + WASD/QE: Fly movement with mouselook
  * - Scroll: Zoom
+ * 
+ * Uses UOrbitInputComponent for all input handling.
  */
 UCLASS()
 class ARCHVIS_API AArchVisOrbitPawn : public AArchVisPawnBase
@@ -32,7 +37,10 @@ public:
 	virtual void ResetView() override;
 	virtual void SetCameraTransform(FVector Location, FRotator Rotation, float ZoomLevel) override;
 
-	// --- Fly-style Movement (RMB held) ---
+	// Initialize input with config
+	void InitializeInput(UArchVisInputConfig* InputConfig);
+
+	// --- Fly-style Movement (FlyMode active) ---
 	
 	// Set WASD movement input
 	UFUNCTION(BlueprintCallable, Category = "ArchVis|Movement")
@@ -42,26 +50,47 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "ArchVis|Movement")
 	void SetVerticalInput(float Input);
 
-	// Look around (when RMB held)
+	// Look around (when FlyMode active)
 	UFUNCTION(BlueprintCallable, Category = "ArchVis|Movement")
 	void Look(FVector2D Delta);
 
-	// Alt+RMB zoom (dolly along view direction)
+	// Dolly zoom (along view direction)
 	UFUNCTION(BlueprintCallable, Category = "ArchVis|Movement")
 	void DollyZoom(float Amount);
 
 	// Focus on a world location
 	virtual void FocusOnLocation(FVector WorldLocation) override;
 
-	// Set fly mode active (RMB held)
+	// Set fly mode active (IA_FlyMode)
 	void SetFlyModeActive(bool bActive);
 	bool IsFlyModeActive() const { return bFlyModeActive; }
+
+	// Set orbit mode active (Alt + IA_Select)
+	void SetOrbitModeActive(bool bActive);
+	bool IsOrbitModeActive() const { return bOrbitModeActive; }
+
+	// Set dolly mode active (Alt + IA_FlyMode)
+	void SetDollyModeActive(bool bActive);
+	bool IsDollyModeActive() const { return bDollyModeActive; }
 
 	// Set speed boost (Shift held)
 	void SetSpeedBoost(bool bBoost) { bSpeedBoost = bBoost; }
 
+	// --- Debug ---
+	
+	UFUNCTION(BlueprintCallable, Category = "ArchVis|Debug")
+	void SetDebugEnabled(bool bEnabled) { bDebugEnabled = bEnabled; }
+
+	UFUNCTION(BlueprintCallable, Category = "ArchVis|Debug")
+	bool IsDebugEnabled() const { return bDebugEnabled; }
+
+	UFUNCTION(Exec)
+	void ArchVisOrbitDebug();
+
 protected:
 	virtual void BeginPlay() override;
+	virtual void PossessedBy(AController* NewController) override;
+	virtual void UnPossessed() override;
 
 	// Pitch limits for orbit
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|3D")
@@ -88,9 +117,21 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
 	float LookSensitivity = 0.5f;
 
+	// --- Debug ---
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug")
+	bool bDebugEnabled = false;
+
+	// --- Input ---
+	
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Input")
+	TObjectPtr<UOrbitInputComponent> OrbitInput;
+
 	// --- State ---
 	
 	bool bFlyModeActive = false;
+	bool bOrbitModeActive = false;
+	bool bDollyModeActive = false;
 	bool bSpeedBoost = false;
 	FVector2D CurrentMovementInput = FVector2D::ZeroVector;
 	float CurrentVerticalInput = 0.0f;

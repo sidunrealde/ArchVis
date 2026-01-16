@@ -141,84 +141,84 @@ public:
 	TObjectPtr<UInputAction> IA_Look;  // Mouse XY for look (Fly pawn)
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|View")
-	TObjectPtr<UInputAction> IA_Orbit;  // Alt+LMB held (3D only)
+	TObjectPtr<UInputAction> IA_Orbit;  // Orbit mode (Alt + Select in 3D)
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|View")
 	TObjectPtr<UInputAction> IA_OrbitDelta;  // Mouse XY for orbit
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|View")
-	TObjectPtr<UInputAction> IA_DollyZoom;  // Alt+RMB drag Y axis
+	TObjectPtr<UInputAction> IA_DollyZoom;  // Dolly zoom along view direction
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|View")
-	TObjectPtr<UInputAction> IA_FlyMode;  // RMB held - enables WASD movement
+	TObjectPtr<UInputAction> IA_FlyMode;  // Fly mode - enables WASD movement and mouselook
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|View")
-	TObjectPtr<UInputAction> IA_ResetView;  // Home key
+	TObjectPtr<UInputAction> IA_ResetView;  // Reset camera to default
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|View")
-	TObjectPtr<UInputAction> IA_FocusSelection;  // F key
+	TObjectPtr<UInputAction> IA_FocusSelection;  // Focus on selected object
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|View")
 	TObjectPtr<UInputAction> IA_PointerPosition;  // Mouse XY tracking
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|View")
-	TObjectPtr<UInputAction> IA_SnapToggle;  // S key
+	TObjectPtr<UInputAction> IA_SnapToggle;  // Toggle grid snap
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|View")
-	TObjectPtr<UInputAction> IA_GridToggle;  // G key
+	TObjectPtr<UInputAction> IA_GridToggle;  // Toggle grid visibility
 
 	// ============================================
 	// SELECTION ACTIONS (IMC_2D_Selection / IMC_3D_Selection)
 	// ============================================
 	
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Selection")
-	TObjectPtr<UInputAction> IA_Select;  // LMB
+	TObjectPtr<UInputAction> IA_Select;  // Primary select action
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Selection")
-	TObjectPtr<UInputAction> IA_SelectAdd;  // Shift+LMB (Chord)
+	TObjectPtr<UInputAction> IA_SelectAdd;  // Add to selection (Shift modifier)
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Selection")
-	TObjectPtr<UInputAction> IA_SelectToggle;  // Ctrl+LMB (Chord)
+	TObjectPtr<UInputAction> IA_SelectToggle;  // Toggle selection (Ctrl modifier)
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Selection")
-	TObjectPtr<UInputAction> IA_SelectAll;  // Ctrl+A (Chord)
+	TObjectPtr<UInputAction> IA_SelectAll;  // Select all objects
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Selection")
-	TObjectPtr<UInputAction> IA_DeselectAll;  // Ctrl+D (Chord)
+	TObjectPtr<UInputAction> IA_DeselectAll;  // Deselect all objects
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Selection")
-	TObjectPtr<UInputAction> IA_BoxSelectStart;  // LMB Hold
+	TObjectPtr<UInputAction> IA_BoxSelectStart;  // Start box selection
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Selection")
 	TObjectPtr<UInputAction> IA_BoxSelectDrag;  // Mouse XY during box select
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Selection")
-	TObjectPtr<UInputAction> IA_BoxSelectEnd;  // LMB Released
+	TObjectPtr<UInputAction> IA_BoxSelectEnd;  // End box selection
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Selection")
-	TObjectPtr<UInputAction> IA_CycleSelection;  // Mouse wheel when overlapping
+	TObjectPtr<UInputAction> IA_CycleSelection;  // Cycle through overlapping objects
 
 	// ============================================
 	// DRAWING ACTIONS (IMC_2D_LineTool / IMC_2D_PolylineTool)
 	// ============================================
 	
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Drawing")
-	TObjectPtr<UInputAction> IA_DrawPlacePoint;  // LMB - place vertex
+	TObjectPtr<UInputAction> IA_DrawPlacePoint;  // Place vertex
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Drawing")
-	TObjectPtr<UInputAction> IA_DrawConfirm;  // Enter - finish polyline
+	TObjectPtr<UInputAction> IA_DrawConfirm;  // Finish drawing
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Drawing")
-	TObjectPtr<UInputAction> IA_DrawCancel;  // Escape / RMB - cancel
+	TObjectPtr<UInputAction> IA_DrawCancel;  // Cancel drawing
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Drawing")
-	TObjectPtr<UInputAction> IA_DrawClose;  // C - close polygon
+	TObjectPtr<UInputAction> IA_DrawClose;  // Close polygon
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Drawing")
-	TObjectPtr<UInputAction> IA_DrawRemoveLastPoint;  // Backspace - undo last vertex
+	TObjectPtr<UInputAction> IA_DrawRemoveLastPoint;  // Remove last vertex
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Drawing")
-	TObjectPtr<UInputAction> IA_OrthoLock;  // Shift held - constrain to axis
+	TObjectPtr<UInputAction> IA_OrthoLock;  // Constrain to axis
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Drawing")
 	TObjectPtr<UInputAction> IA_AngleSnap;  // A - toggle 45° snap

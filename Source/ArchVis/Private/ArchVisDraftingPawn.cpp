@@ -1,6 +1,8 @@
 ﻿// ArchVisDraftingPawn.cpp
 
 #include "ArchVisDraftingPawn.h"
+#include "Input/DraftingInputComponent.h"
+#include "ArchVisInputConfig.h"
 #include "Camera/CameraComponent.h"
 #include "GameFramework/SpringArmComponent.h"
 
@@ -12,6 +14,9 @@ AArchVisDraftingPawn::AArchVisDraftingPawn()
 	MinZoom = 1000.0f;
 	MaxZoom = 20000.0f;
 	TargetArmLength = 5000.0f;
+
+	// Create input component
+	DraftingInput = CreateDefaultSubobject<UDraftingInputComponent>(TEXT("DraftingInput"));
 }
 
 void AArchVisDraftingPawn::BeginPlay()
@@ -31,6 +36,34 @@ void AArchVisDraftingPawn::BeginPlay()
 		// Pitch -90 = looking down, Yaw 0 = X is right, Y is forward on screen
 		TargetRotation = FRotator(-90.0f, 0.0f, 0.0f);
 		SpringArm->SetRelativeRotation(TargetRotation);
+	}
+}
+
+void AArchVisDraftingPawn::PossessedBy(AController* NewController)
+{
+	Super::PossessedBy(NewController);
+
+	if (DraftingInput)
+	{
+		DraftingInput->OnPawnPossessed(NewController);
+	}
+}
+
+void AArchVisDraftingPawn::UnPossessed()
+{
+	if (DraftingInput)
+	{
+		DraftingInput->OnPawnUnpossessed(GetController());
+	}
+
+	Super::UnPossessed();
+}
+
+void AArchVisDraftingPawn::InitializeInput(UArchVisInputConfig* InputConfig)
+{
+	if (DraftingInput && InputConfig)
+	{
+		DraftingInput->Initialize(InputConfig);
 	}
 }
 

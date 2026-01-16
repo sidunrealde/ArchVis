@@ -8,7 +8,6 @@
 #include "ArchVisPawnBase.h"
 #include "ArchVisPlayerController.generated.h"
 
-class AArchVisCameraController;
 class AArchVisPawnBase;
 class AArchVisDraftingPawn;
 class AArchVisOrbitPawn;
@@ -18,6 +17,7 @@ class AArchVisThirdPersonPawn;
 class UArchVisInputConfig;
 class UEnhancedInputLocalPlayerSubsystem;
 class UInputMappingContext;
+class UToolInputComponent;
 
 /**
  * How the snap/constraint modifier key behaves.
@@ -25,11 +25,8 @@ class UInputMappingContext;
 UENUM(BlueprintType)
 enum class ESnapModifierMode : uint8
 {
-	// Press to toggle snap on/off
 	Toggle,
-	// Hold to temporarily disable snap (snap is on by default)
 	HoldToDisable,
-	// Hold to temporarily enable snap (snap is off by default)
 	HoldToEnable
 };
 
@@ -56,9 +53,18 @@ enum class EArchVis2DToolMode : uint8
 };
 
 /**
- * Controller that captures mouse input for the drafting tools using Enhanced Input.
- * Manages Input Mapping Context switching based on tool and mode.
- * Manages a Virtual Cursor for CAD-style interaction.
+ * Controller for ArchVis drafting application.
+ * 
+ * Responsibilities:
+ * - Global actions (Undo/Redo/Delete/Escape/Save)
+ * - Tool switching and management
+ * - Numeric input buffer
+ * - Virtual cursor for 2D mode
+ * - Pawn switching coordination
+ * 
+ * Navigation input is handled by pawn-specific input components:
+ * - UDraftingInputComponent for 2D pan/zoom
+ * - UOrbitInputComponent for 3D orbit/pan/dolly/fly
  */
 UCLASS()
 class ARCHVIS_API AArchVisPlayerController : public APlayerController
@@ -74,73 +80,57 @@ public:
 
 	// --- Input Context Management ---
 	
-	// Switch to a different interaction mode (2D/3D)
 	UFUNCTION(BlueprintCallable, Category = "ArchVis|Input")
 	void SetInteractionMode(EArchVisInteractionMode NewMode);
 
-	// Get current interaction mode
 	UFUNCTION(BlueprintCallable, Category = "ArchVis|Input")
 	EArchVisInteractionMode GetInteractionMode() const { return CurrentInteractionMode; }
 
-	// Notify the controller that the active tool has changed (updates IMC)
 	UFUNCTION(BlueprintCallable, Category = "ArchVis|Input")
 	void OnToolChanged(ERTPlanToolType NewToolType);
 
-	// Get the current screen position of the virtual cursor
 	UFUNCTION(BlueprintCallable, Category = "ArchVis|Input")
 	FVector2D GetVirtualCursorPos() const { return VirtualCursorPos; }
 
-	// Get the numeric input buffer (for HUD display)
 	UFUNCTION(BlueprintCallable, Category = "ArchVis|Input")
 	const FRTNumericInputBuffer& GetNumericInputBuffer() const { return NumericInputBuffer; }
 
-	// Get current length unit setting
 	UFUNCTION(BlueprintCallable, Category = "ArchVis|Input")
 	ERTLengthUnit GetCurrentUnit() const { return NumericInputBuffer.CurrentUnit; }
 
-	// Set current length unit
 	UFUNCTION(BlueprintCallable, Category = "ArchVis|Input")
 	void SetCurrentUnit(ERTLengthUnit NewUnit) { NumericInputBuffer.CurrentUnit = NewUnit; }
 
-	// Get whether snap is currently enabled (accounts for modifier key state)
 	UFUNCTION(BlueprintCallable, Category = "ArchVis|Snap")
 	bool IsSnapEnabled() const;
 
 	// --- Pawn Management ---
 
-	// Switch to a different pawn type
 	UFUNCTION(BlueprintCallable, Category = "ArchVis|Pawn")
 	void SwitchToPawnType(EArchVisPawnType NewPawnType);
 
-	// Get current pawn type
 	UFUNCTION(BlueprintCallable, Category = "ArchVis|Pawn")
 	EArchVisPawnType GetCurrentPawnType() const { return CurrentPawnType; }
 
-	// Toggle between 2D and 3D pawns
 	UFUNCTION(BlueprintCallable, Category = "ArchVis|Pawn")
 	void ToggleViewPawn();
 
-	// Get the current ArchVis pawn (cast helper)
 	UFUNCTION(BlueprintCallable, Category = "ArchVis|Pawn")
 	AArchVisPawnBase* GetArchVisPawn() const;
 
-	/** Toggle verbose input/navigation debug logging at runtime. */
+	// --- Debug ---
+	
 	UFUNCTION(BlueprintCallable, Category = "ArchVis|Debug")
 	void SetInputDebugEnabled(bool bEnabled) { bInputDebugEnabled = bEnabled; }
 
 	UFUNCTION(BlueprintCallable, Category = "ArchVis|Debug")
 	bool IsInputDebugEnabled() const { return bInputDebugEnabled; }
 
-	/** Toggle input debug logging at runtime. */
 	UFUNCTION(Exec)
 	void ArchVisToggleInputDebug();
 
-	/** Set input debug logging explicitly (0/1). */
-	UFUNCTION(Exec)
-	void ArchVisSetInputDebug(int32 bEnabled);
-
 protected:
-	// --- Pawn Classes (Assign in BP or set defaults) ---
+	// --- Pawn Classes ---
 	
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Pawn")
 	TSubclassOf<AArchVisDraftingPawn> DraftingPawnClass;
@@ -157,33 +147,30 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Pawn")
 	TSubclassOf<AArchVisThirdPersonPawn> ThirdPersonPawnClass;
 
-	// Current pawn type
 	EArchVisPawnType CurrentPawnType = EArchVisPawnType::Drafting2D;
 
-	// Spawn and possess a pawn of the given type
 	APawn* SpawnArchVisPawn(EArchVisPawnType PawnType, FVector Location, FRotator Rotation);
 
-protected:
-	// Input Config Data Asset (Assign in BP)
+	// --- Input Config ---
+	
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input")
 	TObjectPtr<UArchVisInputConfig> InputConfig;
 
-	// Mouse sensitivity for virtual cursor movement.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input", meta = (ClampMin = "0.01", UIMin = "0.1", UIMax = "10.0"))
 	float MouseSensitivity = 2.0f;
 
-	// Default unit for length input
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input")
 	ERTLengthUnit DefaultUnit = ERTLengthUnit::Centimeters;
 
 	// --- Snap Settings ---
+	
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Snap")
 	ESnapModifierMode SnapModifierMode = ESnapModifierMode::HoldToDisable;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Snap")
 	bool bSnapEnabledByDefault = true;
 
-	// --- Input Context Priorities (Higher = Processed First) ---
+	// --- IMC Priorities ---
 	static constexpr int32 IMC_Priority_Global = 0;
 	static constexpr int32 IMC_Priority_ModeBase = 1;
 	static constexpr int32 IMC_Priority_Tool = 2;
@@ -204,26 +191,6 @@ protected:
 	void OnModifierShiftCompleted(const FInputActionValue& Value);
 	void OnModifierAltStarted(const FInputActionValue& Value);
 	void OnModifierAltCompleted(const FInputActionValue& Value);
-
-	// --- View Input Handlers ---
-	void OnPan(const FInputActionValue& Value);
-	void OnPanDelta(const FInputActionValue& Value);
-	void OnZoom(const FInputActionValue& Value);
-	void OnOrbit(const FInputActionValue& Value);
-	void OnOrbitDelta(const FInputActionValue& Value);
-	void OnFlyMode(const FInputActionValue& Value);
-	void OnDollyZoom(const FInputActionValue& Value);
-	void OnResetView(const FInputActionValue& Value);
-	void OnFocusSelection(const FInputActionValue& Value);
-	void OnPointerPosition(const FInputActionValue& Value);
-	void OnSnapToggle(const FInputActionValue& Value);
-	void OnGridToggle(const FInputActionValue& Value);
-
-	// --- Fly Pawn Movement Handlers ---
-	void OnMove(const FInputActionValue& Value);
-	void OnMoveUp(const FInputActionValue& Value);
-	void OnMoveDown(const FInputActionValue& Value);
-	void OnLook(const FInputActionValue& Value);
 
 	// --- Selection Input Handlers ---
 	void OnSelectStarted(const FInputActionValue& Value);
@@ -249,7 +216,7 @@ protected:
 
 	// --- Numeric Entry Handlers ---
 	void OnNumericDigit(int32 Digit);
-	void OnNumericDigitInput(const FInputActionValue& Value);  // Single handler for 1D Axis digit input
+	void OnNumericDigitInput(const FInputActionValue& Value);
 	void OnNumericDecimal(const FInputActionValue& Value);
 	void OnNumericBackspaceStarted(const FInputActionValue& Value);
 	void OnNumericBackspaceCompleted(const FInputActionValue& Value);
@@ -261,11 +228,11 @@ protected:
 	void OnNumericSubtract(const FInputActionValue& Value);
 	void OnNumericMultiply(const FInputActionValue& Value);
 	void OnNumericDivide(const FInputActionValue& Value);
-	
-	// Perform one backspace operation
 	void PerformBackspace();
 
-	// --- 3D Navigation Handlers ---
+	// --- View/Grid Handlers ---
+	void OnSnapToggle(const FInputActionValue& Value);
+	void OnGridToggle(const FInputActionValue& Value);
 	void OnViewTop(const FInputActionValue& Value);
 	void OnViewFront(const FInputActionValue& Value);
 	void OnViewRight(const FInputActionValue& Value);
@@ -275,6 +242,10 @@ protected:
 	void OnToolSelectHotkey(const FInputActionValue& Value);
 	void OnToolLineHotkey(const FInputActionValue& Value);
 	void OnToolPolylineHotkey(const FInputActionValue& Value);
+
+	// --- Console Commands ---
+	UFUNCTION(Exec)
+	void ArchVisSetInputDebug(int32 bEnabled);
 
 	// Helper to get the unified pointer event
 	FRTPointerEvent GetPointerEvent(ERTPointerAction Action) const;
@@ -291,10 +262,8 @@ protected:
 	// Switch to a specific 2D tool mode
 	void SwitchTo2DToolMode(EArchVis2DToolMode NewToolMode);
 
-	// Activate numeric entry context (layered on top)
+	// Activate/deactivate numeric entry context
 	void ActivateNumericEntryContext();
-
-	// Deactivate numeric entry context
 	void DeactivateNumericEntryContext();
 
 	// Helper to add/remove mapping contexts
@@ -302,12 +271,15 @@ protected:
 	void RemoveMappingContext(UInputMappingContext* Context);
 	void ClearAllToolContexts();
 
-	// State
-	bool bPanActive = false;
-	bool bOrbitActive = false;
+	// Update mouse lock state for 3D navigation (locks mouse when orbit is active)
+	void UpdateMouseLockState();
+
+	// --- State ---
+	
 	bool bBoxSelectActive = false;
 	FVector2D BoxSelectStart;
 	FVector2D VirtualCursorPos;
+	FVector2D LastMousePosition = FVector2D::ZeroVector;
 	FRTNumericInputBuffer NumericInputBuffer;
 
 	// Modifier states
@@ -315,32 +287,24 @@ protected:
 	bool bAltDown = false;
 	bool bCtrlDown = false;
 
-	// Drafting constraint states (used by tools via FRTPointerEvent)
+	// Action states (for selection/orbit interaction)
+	bool bSelectActionActive = false;  // IA_Select is active
+	bool bOrbitActive = false;
+
+	// Drafting constraint states
 	bool bOrthoLockActive = false;
 	bool bAngleSnapEnabled = false;
-
-	/** Raw mouse button states (tracked via selection/pan/fly handlers). */
-	bool bLMBDown = false;
-	bool bRMBDown = false;
-	bool bMMBDown = false;
 
 	// Snap state
 	bool bSnapToggledOn = true;
 	bool bSnapModifierHeld = false;
 	bool bGridVisible = true;
 
-	// Mouse tracking for pan
-	FVector2D LastMousePosition = FVector2D::ZeroVector;
-
-	// WASD movement state (for 3D fly mode)
-	FVector2D CurrentMoveInput = FVector2D::ZeroVector;
-	float CurrentVerticalMoveInput = 0.0f;
-
 	// Backspace repeat state
 	bool bBackspaceHeld = false;
 	float BackspaceHoldTime = 0.0f;
-	float BackspaceRepeatDelay = 0.4f;  // Initial delay before repeat starts
-	float BackspaceRepeatRate = 0.05f;  // Time between repeats
+	float BackspaceRepeatDelay = 0.4f;
+	float BackspaceRepeatRate = 0.05f;
 	float BackspaceNextRepeatTime = 0.0f;
 
 	// Current states
@@ -349,38 +313,15 @@ protected:
 	ERTPlanToolType CurrentToolType = ERTPlanToolType::None;
 	bool bNumericEntryContextActive = false;
 
-	// Currently active tool-specific IMC (to track for removal)
 	UPROPERTY(Transient)
 	TObjectPtr<UInputMappingContext> ActiveToolIMC;
 
-	// Currently active mode base IMC (to track for removal)
 	UPROPERTY(Transient)
 	TObjectPtr<UInputMappingContext> ActiveModeBaseIMC;
 
-	UPROPERTY(Transient)
-	TObjectPtr<AArchVisCameraController> CameraController;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Input")
+	TObjectPtr<UToolInputComponent> ToolInput;
 
-	/** When enabled, logs a small amount of debug output for navigation input. */
 	UPROPERTY(EditAnywhere, Category = "ArchVis|Debug")
 	bool bInputDebugEnabled = false;
-
-	/**
-	 * Unified “Unreal Editor-style” navigation state for the 3D orbit pawn.
-	 * This is derived from modifier + mouse buttons.
-	 */
-	struct FNav3DState
-	{
-		bool bPan = false;     // MMB
-		bool bOrbit = false;   // Alt + LMB
-		bool bFly = false;     // RMB
-		bool bDolly = false;   // Alt + RMB
-	};
-
-	FNav3DState GetNav3DState() const;
-
-	/** Emits a quick snapshot of current mode + button/modifier states. */
-	void DebugLogInputSnapshot(const TCHAR* Context, const FVector2D& MouseDelta = FVector2D::ZeroVector) const;
-
-	/** Emits debug logs for nav state changes when enabled. */
-	void DebugLogNavState(const TCHAR* Context, const FVector2D& MouseDelta) const;
 };

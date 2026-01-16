@@ -84,6 +84,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "ArchVis|Camera")
 	virtual float GetZoomLevel() const;
 
+	// Get the target location for camera interpolation (for debug)
+	UFUNCTION(BlueprintCallable, Category = "ArchVis|Camera")
+	FVector GetPawnTargetLocation() const { return TargetLocation; }
+
 protected:
 	virtual void BeginPlay() override;
 
