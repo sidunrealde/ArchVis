@@ -15,6 +15,12 @@ void URTPlanToolBase::OnPointerEvent(const FRTPointerEvent& Event)
 		FVector2D Snapped = GetSnappedPoint(GroundPoint);
 		LastSnappedWorldPos = FVector(Snapped.X, Snapped.Y, 0.0f);
 	}
+	else if (Event.Action == ERTPointerAction::Move)
+	{
+		// If we can't intersect ground (e.g. looking at sky), project far away
+		// This prevents cursor from getting stuck at horizon
+		LastSnappedWorldPos = Event.WorldOrigin + Event.WorldDirection * 100000.0f;
+	}
 }
 
 bool URTPlanToolBase::GetGroundIntersection(const FRTPointerEvent& Event, FVector& OutPoint) const

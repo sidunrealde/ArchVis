@@ -72,10 +72,18 @@ void URTPlanSelectTool::OnPointerEvent(const FRTPointerEvent& Event)
 				MarqueeEndWorld = WorldPos;
 			}
 		}
-		else if (Event.Action == ERTPointerAction::Move && bHasWorldPos)
+		else if (Event.Action == ERTPointerAction::Move)
 		{
-			// Update snapped cursor position for crosshair
-			LastSnappedWorldPos = FVector(WorldPos.X, WorldPos.Y, 0.0f);
+			if (bHasWorldPos)
+			{
+				// Update snapped cursor position for crosshair
+				LastSnappedWorldPos = FVector(WorldPos.X, WorldPos.Y, 0.0f);
+			}
+			else
+			{
+				// Project cursor into distance when looking at sky so it doesn't get stuck at horizon
+				LastSnappedWorldPos = Event.WorldOrigin + Event.WorldDirection * 100000.0f;
+			}
 		}
 		break;
 
@@ -98,6 +106,10 @@ void URTPlanSelectTool::OnPointerEvent(const FRTPointerEvent& Event)
 				MarqueeEndWorld = WorldPos;
 				LastSnappedWorldPos = FVector(WorldPos.X, WorldPos.Y, 0.0f);
 			}
+			else
+			{
+				LastSnappedWorldPos = Event.WorldOrigin + Event.WorldDirection * 100000.0f;
+			}
 		}
 		else if (Event.Action == ERTPointerAction::Up)
 		{
@@ -111,10 +123,17 @@ void URTPlanSelectTool::OnPointerEvent(const FRTPointerEvent& Event)
 		break;
 
 	case EState::MarqueeDragging:
-		if (Event.Action == ERTPointerAction::Move && bHasWorldPos)
+		if (Event.Action == ERTPointerAction::Move)
 		{
-			MarqueeEndWorld = WorldPos;
-			LastSnappedWorldPos = FVector(WorldPos.X, WorldPos.Y, 0.0f);
+			if (bHasWorldPos)
+			{
+				MarqueeEndWorld = WorldPos;
+				LastSnappedWorldPos = FVector(WorldPos.X, WorldPos.Y, 0.0f);
+			}
+			else
+			{
+				LastSnappedWorldPos = Event.WorldOrigin + Event.WorldDirection * 100000.0f;
+			}
 		}
 		else if (Event.Action == ERTPointerAction::Up)
 		{
@@ -273,4 +292,3 @@ void URTPlanSelectTool::PerformMarqueeSelection(bool bAddToSelection, bool bRemo
 
 	OnSelectionChanged.Broadcast();
 }
-

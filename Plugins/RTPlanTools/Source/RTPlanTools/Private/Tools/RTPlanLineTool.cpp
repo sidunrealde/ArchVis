@@ -286,6 +286,12 @@ void URTPlanLineTool::OnPointerEvent(const FRTPointerEvent& Event)
 	FVector GroundPoint;
 	if (!GetGroundIntersection(Event, GroundPoint))
 	{
+		// If we can't intersect ground (e.g. looking at sky), project far away
+		// This prevents cursor from getting stuck at horizon
+		if (Event.Action == ERTPointerAction::Move)
+		{
+			LastSnappedWorldPos = Event.WorldOrigin + Event.WorldDirection * 100000.0f;
+		}
 		return;
 	}
 
