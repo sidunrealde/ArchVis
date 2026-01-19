@@ -6,6 +6,33 @@ Legend: [x] done, [-] partial, [ ] pending
 
 ---
 
+## Known Issues / Bugs (Updated 2026-01-19)
+
+| Issue | Status | Description |
+|-------|--------|-------------|
+| Selection uses raw input | 🔴 Open | `OnSelectStarted` uses `IsInputKeyDown()` for Shift/Ctrl/Alt instead of Enhanced Input actions |
+| Marquee selection broken | 🔴 Open | Box/marquee selection not working in 2D mode - world positions not updating correctly |
+| SelectAll not working | 🔴 Open | `IA_SelectAll` handler exists but doesn't trigger `SelectTool->SelectAll()` |
+| DeselectAll not working | 🔴 Open | `IA_DeselectAll` handler exists but doesn't trigger `SelectTool->ClearSelection()` |
+| FocusSelection broken | 🔴 Open | `IA_FocusSelection` not working properly in both 2D and 3D mode |
+| 3D selection issues | ⚠️ Partial | Line trace may fail in some cases, cursor can snap to horizon |
+
+### Selection System Refactor Needed
+The current selection implementation in `AArchVisPlayerController::OnSelectStarted()` uses raw keyboard input:
+```cpp
+bool bShiftHeld = IsInputKeyDown(EKeys::LeftShift) || IsInputKeyDown(EKeys::RightShift);
+bool bCtrlHeld = IsInputKeyDown(EKeys::LeftControl) || IsInputKeyDown(EKeys::RightControl);
+bool bAltHeld = IsInputKeyDown(EKeys::LeftAlt) || IsInputKeyDown(EKeys::RightAlt);
+```
+
+This should be refactored to use Enhanced Input entirely:
+- `IA_SelectAdd` (Shift+LMB) should fire independently as a chorded action
+- `IA_SelectToggle` (Ctrl+LMB) should fire independently as a chorded action
+- `IA_SelectRemove` (Alt+LMB) should fire independently as a chorded action
+- `IA_Select` (plain LMB) should only fire when no modifiers are held
+
+---
+
 ## Phase 0: Baseline plumbing (game ↔ plugins)
 - [x] `AArchVisGameMode` creates `URTPlanDocument`.
 - [x] `AArchVisGameMode` creates `URTPlanToolManager` and initializes it with the document.
@@ -19,10 +46,12 @@ Legend: [x] done, [-] partial, [ ] pending
 - [x] Top-down orthographic mode (`AArchVisDraftingPawn`).
 - [x] Perspective orbit mode (`AArchVisOrbitPawn`).
 - [x] Toggle between 2D/3D pawns (`SwitchToPawnType()`).
-- [x] Pan + zoom on 2D pawn (AutoCAD-style).
+- [x] Pan + zoom on 2D pawn (AutoCAD-style, 1:1 cursor-to-scene movement).
 - [x] Pan + zoom on 3D pawn (via `UOrbitInputComponent`).
 - [x] Orbit controls on 3D pawn (Alt+LMB via `UOrbitInputComponent`).
 - [x] Fly mode on 3D pawn (RMB+WASD via `UOrbitInputComponent`).
+- [x] WASD movement axis correctly mapped (W/S=forward/back, A/D=left/right).
+- [x] Adjustable fly speed via RMB+Scroll (`IA_AdjustFlySpeed`).
 - [x] First-person walkthrough pawn (`AArchVisFirstPersonPawn`).
 - [x] Third-person walkthrough pawn (`AArchVisThirdPersonPawn`).
 - [x] Base pawn class with common camera interface (`AArchVisPawnBase`).
@@ -59,8 +88,8 @@ Legend: [x] done, [-] partial, [ ] pending
 - [ ] Remove redundant Tick navigation logic from controller
 - [ ] Migrate remaining tool handlers from controller to `UToolInputComponent`
 - [ ] Remove `UpdateInputMappingContexts()` complexity from controller
-- [ ] Test 2D drafting with new `UDraftingInputComponent`
-- [ ] Test 3D navigation with new `UOrbitInputComponent`
+- [x] Test 2D drafting with new `UDraftingInputComponent` (1:1 pan working)
+- [x] Test 3D navigation with new `UOrbitInputComponent` (orbit/pan/fly/WASD working)
 
 ### 1.2 HUD: full-screen crosshair cursor
 - [x] Crosshair lines (full screen).
@@ -587,33 +616,56 @@ In the Blueprint derived from `AArchVisPlayerController`:
 - [ ] `IA_ToolPolyLine` → `OnToolPolyline` (calls `ToolManager->SelectToolByType(Polyline)`)
 
 ### 6.2 View/Navigation Actions - 2D Mode
-- [ ] `IA_Pan` → `OnPanStarted/OnPanCompleted` (set `bPanning` state)
-- [ ] `IA_PanDelta` → `OnPanDelta` (move camera XY when panning)
-- [ ] `IA_Zoom` → `OnZoom` (adjust ortho width or FOV)
-- [ ] `IA_PointerPosition` → `OnPointerPosition` (update virtual cursor position)
+- [x] `IA_Pan` → `OnPanStarted/OnPanCompleted` (set `bPanning` state)
+- [x] `IA_PanDelta` → `OnPanDelta` (1:1 cursor-to-scene pan with interpolation)
+- [x] `IA_Zoom` → `OnZoom` (adjust ortho width)
+- [x] `IA_PointerPosition` → `OnPointerPosition` (update virtual cursor position)
 - [x] `IA_ResetView` → `OnResetView` (reset camera to default)
-- [ ] `IA_FocusSelection` → `OnFocusSelection` (frame selected objects)
+- [ ] `IA_FocusSelection` → `OnFocusSelection` (**BROKEN**: not working properly in 2D and 3D mode)
 - [ ] `IA_SnapToggle` → `OnSnapToggle` (toggle snap on/off)
 - [ ] `IA_GridToggle` → `OnGridToggle` (toggle grid visibility)
 
 ### 6.3 View/Navigation Actions - 3D Mode
-- [ ] `IA_Orbit` → `OnOrbitStarted/OnOrbitCompleted` (set `bOrbiting` state)
-- [ ] `IA_OrbitDelta` → `OnOrbitDelta` (rotate camera around target)
+- [x] `IA_Orbit` → `OnOrbitStarted/OnOrbitCompleted` (set `bOrbiting` state)
+- [x] `IA_OrbitDelta` → `OnOrbitDelta` (rotate camera around target)
+- [x] `IA_Move` → `OnMove` (WASD movement with correct axis mapping: Y=forward/back, X=right/left)
+- [x] `IA_AdjustFlySpeed` → `OnAdjustFlySpeed` (RMB+Scroll adjusts fly speed)
 - [ ] `IA_ViewTop` → `OnViewTop` (set camera to top orthographic view)
 - [ ] `IA_ViewFront` → `OnViewFront` (set camera to front view)
 - [ ] `IA_ViewRight` → `OnViewRight` (set camera to right view)
 - [ ] `IA_ViewPerspective` → `OnViewPerspective` (toggle ortho/perspective)
 
 ### 6.4 Selection Actions - Wire to SelectTool
-- [ ] `IA_Select` → `OnSelect` (route LMB to SelectTool)
-- [ ] `IA_SelectAdd` → (handled via Shift modifier state in `FRTPointerEvent`)
-- [ ] `IA_SelectToggle` → (handled via Ctrl modifier state in `FRTPointerEvent`)
-- [ ] `IA_SelectAll` → `OnSelectAll` (select all walls in document)
-- [ ] `IA_DeselectAll` → `OnDeselectAll` (clear selection)
+
+> ⚠️ **KNOWN ISSUES (2026-01-19):**
+> - Selection currently uses raw keyboard input (`IsInputKeyDown`) for modifier detection instead of Enhanced Input
+> - Need to refactor to use `IA_SelectAdd`, `IA_SelectToggle`, `IA_SelectRemove` as proper chorded actions
+> - Marquee selection (box select) is not working in 2D mode
+> - SelectAll and DeselectAll handlers exist but are not working
+> - FocusSelection is not working properly in both 2D and 3D mode
+> - 3D selection uses line trace but may have issues with hit detection
+
+- [x] `IA_Select` → `OnSelectStarted/OnSelectCompleted` (basic click selection works)
+- [ ] `IA_SelectAdd` → `OnSelectAdd` (Shift+Click - **BROKEN**: using raw input instead of Enhanced Input)
+- [ ] `IA_SelectToggle` → `OnSelectToggle` (Ctrl+Click - **BROKEN**: using raw input instead of Enhanced Input)
+- [ ] `IA_SelectRemove` → `OnSelectRemove` (Alt+Click - **BROKEN**: using raw input instead of Enhanced Input)
+- [ ] `IA_SelectAll` → `OnSelectAll` (**BROKEN**: handler exists but not working)
+- [ ] `IA_DeselectAll` → `OnDeselectAll` (**BROKEN**: handler exists but not working)
 - [ ] `IA_CycleSelection` → `OnCycleSelection` (cycle through overlapping objects)
-- [ ] `IA_BoxSelectStart` → `OnBoxSelectStart` (begin marquee selection)
-- [ ] `IA_BoxSelectDrag` → `OnBoxSelectDrag` (update marquee rectangle)
-- [ ] `IA_BoxSelectEnd` → `OnBoxSelectEnd` (complete marquee and select)
+- [ ] `IA_BoxSelectStart` → `OnBoxSelectStart` (**BROKEN**: marquee not working in 2D mode)
+- [ ] `IA_BoxSelectDrag` → `OnBoxSelectDrag` (**BROKEN**: marquee not working in 2D mode)
+- [ ] `IA_BoxSelectEnd` → `OnBoxSelectEnd` (**BROKEN**: marquee not working in 2D mode)
+
+#### Selection TODO:
+- [ ] Refactor `OnSelectStarted` to NOT use `IsInputKeyDown()` - use Enhanced Input entirely
+- [ ] Make `IA_SelectAdd` (Shift+LMB) work as a proper chorded action
+- [ ] Make `IA_SelectToggle` (Ctrl+LMB) work as a proper chorded action
+- [ ] Make `IA_SelectRemove` (Alt+LMB) work as a proper chorded action
+- [ ] Fix marquee selection in 2D mode - investigate why world positions aren't updating
+- [ ] Fix SelectAll - ensure it calls `SelectTool->SelectAll()` properly
+- [ ] Fix DeselectAll - ensure it calls `SelectTool->ClearSelection()` properly
+- [ ] Fix FocusSelection in 2D mode - camera should center on selection bounds
+- [ ] Fix FocusSelection in 3D mode - camera should orbit to frame selection
 
 ### 6.5 Drawing Actions - Wire to LineTool/PolylineTool
 - [x] `IA_DrawPlacePoint` → `OnDrawPlacePoint` (route LMB to active drawing tool)
@@ -652,7 +704,10 @@ In the Blueprint derived from `AArchVisPlayerController`:
 
 ### 6.9 Integration Testing
 - [x] Test tool switching via hotkeys (V = Select, L = Line, P = Polyline)
-- [x] Test 2D pan/zoom with MMB and scroll wheel
+- [x] Test 2D pan/zoom with MMB and scroll wheel (1:1 cursor tracking)
+- [x] Test 3D orbit/pan/fly with mouse navigation
+- [x] Test 3D WASD movement (W/S=forward/back, A/D=left/right)
+- [x] Test fly speed adjustment via RMB+Scroll
 - [ ] Test selection with LMB, Shift+LMB, Alt+LMB
 - [x] Test line drawing with click-move-click workflow
 - [x] Test polyline with multiple vertices and Enter to confirm

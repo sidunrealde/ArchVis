@@ -62,6 +62,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "RTPlan|Tools")
 	TArray<FGuid> GetSelectedOpeningIds() const;
 
+	// Delete currently selected items
+	UFUNCTION(BlueprintCallable, Category = "RTPlan|Tools")
+	void DeleteSelection();
+
 	// Call this every frame or when document changes to keep spatial index fresh
 	UFUNCTION()
 	void UpdateSpatialIndex();

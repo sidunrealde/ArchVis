@@ -46,6 +46,12 @@ public:
 	// Hit test a rectangle against openings, returns all opening IDs that intersect
 	TArray<FGuid> HitTestOpeningsInRect(const FVector2D& RectMin, const FVector2D& RectMax) const;
 
+	// Debug: Draw all segments in the spatial index
+	void DrawDebugSegments(UWorld* World, float Duration = 5.0f) const;
+
+	// Get the number of segments in the index
+	int32 GetNumSegments() const { return SnapSegments.Num(); }
+
 private:
 	// Cache of snap points (Endpoints, Midpoints)
 	struct FSnapPoint

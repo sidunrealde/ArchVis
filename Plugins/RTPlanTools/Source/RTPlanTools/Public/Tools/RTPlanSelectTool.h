@@ -29,6 +29,14 @@ public:
 	virtual void OnExit() override;
 	virtual void OnPointerEvent(const FRTPointerEvent& Event) override;
 
+	// --- Debug ---
+	
+	UFUNCTION(BlueprintCallable, Category = "RTPlan|Debug")
+	void SetDebugEnabled(bool bEnabled) { bDebugEnabled = bEnabled; }
+	
+	UFUNCTION(BlueprintCallable, Category = "RTPlan|Debug")
+	bool IsDebugEnabled() const { return bDebugEnabled; }
+
 	// --- Selection State ---
 
 	// Get all selected wall IDs
@@ -55,25 +63,51 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "RTPlan|Selection")
 	void ClearSelection();
 
+	// Select all walls and openings in the document
+	UFUNCTION(BlueprintCallable, Category = "RTPlan|Selection")
+	void SelectAll();
+
+	// Get the center point of all selected items (for focus camera)
+	UFUNCTION(BlueprintCallable, Category = "RTPlan|Selection")
+	FVector GetSelectionCenter() const;
+
+	// Get the bounding box of all selected items
+	UFUNCTION(BlueprintCallable, Category = "RTPlan|Selection")
+	FBox GetSelectionBounds() const;
+
 	// --- Marquee State (for HUD visualization) ---
 
 	// Is a marquee drag currently in progress?
 	UFUNCTION(BlueprintCallable, Category = "RTPlan|Selection")
 	bool IsMarqueeDragging() const { return bIsMarqueeDragging; }
 
-	// Get marquee start point (screen or world space based on implementation)
+	// Get marquee start point (world space)
 	UFUNCTION(BlueprintCallable, Category = "RTPlan|Selection")
 	FVector2D GetMarqueeStart() const { return MarqueeStartWorld; }
 
-	// Get marquee current end point
+	// Get marquee current end point (world space)
 	UFUNCTION(BlueprintCallable, Category = "RTPlan|Selection")
 	FVector2D GetMarqueeEnd() const { return MarqueeEndWorld; }
+
+	// Draw the marquee visualization (call from Tick or HUD)
+	UFUNCTION(BlueprintCallable, Category = "RTPlan|Selection")
+	void DrawMarqueeVisualization(UWorld* World) const;
 
 	// --- Events ---
 
 	// Broadcast when selection changes
 	UPROPERTY(BlueprintAssignable, Category = "RTPlan|Selection")
 	FOnSelectionChanged OnSelectionChanged;
+
+	// --- Wall Property Access ---
+
+	/** Log properties of all selected walls to the output log */
+	UFUNCTION(BlueprintCallable, Category = "RTPlan|Selection")
+	void LogSelectedWallProperties() const;
+
+	/** Get wall length in cm (distance between vertices) */
+	UFUNCTION(BlueprintCallable, Category = "RTPlan|Selection")
+	float GetWallLength(const FGuid& WallId) const;
 
 	// --- Settings ---
 
@@ -95,6 +129,9 @@ private:
 
 	EState State = EState::Idle;
 
+	// Debug flag
+	bool bDebugEnabled = false;
+
 	// Selection sets
 	TSet<FGuid> SelectedWallIds;
 	TSet<FGuid> SelectedOpeningIds;
@@ -108,6 +145,7 @@ private:
 	// Cached modifier states from the initial mouse down
 	bool bShiftOnMouseDown = false;
 	bool bAltOnMouseDown = false;
+	bool bCtrlOnMouseDown = false;
 
 	// Helper: Perform a single-click selection at the given world position
 	void PerformClickSelection(const FVector2D& WorldPos, bool bAddToSelection, bool bRemoveFromSelection);
@@ -117,5 +155,8 @@ private:
 
 	// Helper: Get world position from pointer event
 	bool GetWorldPosition(const FRTPointerEvent& Event, FVector2D& OutWorldPos) const;
+	
+	// Helper: Perform 3D line trace for selection
+	bool PerformLineTrace(const FRTPointerEvent& Event, FVector& OutHitLocation) const;
 };
 

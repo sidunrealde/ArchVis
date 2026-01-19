@@ -184,6 +184,9 @@ public:
 	TObjectPtr<UInputAction> IA_SelectToggle;  // Toggle selection (Ctrl modifier)
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Selection")
+	TObjectPtr<UInputAction> IA_SelectRemove;  // Remove from selection (Alt modifier)
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Selection")
 	TObjectPtr<UInputAction> IA_SelectAll;  // Select all objects
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Selection")

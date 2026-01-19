@@ -78,6 +78,9 @@ public:
 	virtual void Tick(float DeltaTime) override;
 	virtual void BeginPlay() override;
 
+	/** Called by GameMode when it has finished initializing (ToolManager, ShellActor, etc.) */
+	void OnGameModeReady();
+
 	// --- Input Context Management ---
 	
 	UFUNCTION(BlueprintCallable, Category = "ArchVis|Input")
@@ -126,8 +129,17 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "ArchVis|Debug")
 	bool IsInputDebugEnabled() const { return bInputDebugEnabled; }
 
+	UFUNCTION(BlueprintCallable, Category = "ArchVis|Debug")
+	void SetSelectionDebugEnabled(bool bEnabled);
+
+	UFUNCTION(BlueprintCallable, Category = "ArchVis|Debug")
+	bool IsSelectionDebugEnabled() const { return bSelectionDebugEnabled; }
+
 	UFUNCTION(Exec)
 	void ArchVisToggleInputDebug();
+
+	UFUNCTION(Exec)
+	void ArchVisToggleSelectionDebug();
 
 protected:
 	// --- Pawn Classes ---
@@ -196,13 +208,21 @@ protected:
 	void OnSelectStarted(const FInputActionValue& Value);
 	void OnSelectCompleted(const FInputActionValue& Value);
 	void OnSelectAdd(const FInputActionValue& Value);
+	void OnSelectAddCompleted(const FInputActionValue& Value);
 	void OnSelectToggle(const FInputActionValue& Value);
+	void OnSelectToggleCompleted(const FInputActionValue& Value);
+	void OnSelectRemove(const FInputActionValue& Value);
+	void OnSelectRemoveCompleted(const FInputActionValue& Value);
 	void OnSelectAll(const FInputActionValue& Value);
 	void OnDeselectAll(const FInputActionValue& Value);
 	void OnBoxSelectStart(const FInputActionValue& Value);
 	void OnBoxSelectDrag(const FInputActionValue& Value);
 	void OnBoxSelectEnd(const FInputActionValue& Value);
 	void OnCycleSelection(const FInputActionValue& Value);
+
+	// Selection change handler (bound to SelectTool's OnSelectionChanged delegate)
+	UFUNCTION()
+	void HandleSelectionChanged();
 
 	// --- Drawing Input Handlers ---
 	void OnDrawPlacePoint(const FInputActionValue& Value);
@@ -237,6 +257,7 @@ protected:
 	void OnViewFront(const FInputActionValue& Value);
 	void OnViewRight(const FInputActionValue& Value);
 	void OnViewPerspective(const FInputActionValue& Value);
+	void OnFocusSelection(const FInputActionValue& Value);
 
 	// Tool switching handlers
 	void OnToolSelectHotkey(const FInputActionValue& Value);
@@ -287,6 +308,10 @@ protected:
 	bool bAltDown = false;
 	bool bCtrlDown = false;
 
+	// Selection mode (set by which action triggered the selection)
+	enum class ESelectionMode { Replace, Add, Toggle, Remove };
+	ESelectionMode CurrentSelectionMode = ESelectionMode::Replace;
+
 	// Action states (for selection/orbit interaction)
 	bool bSelectActionActive = false;  // IA_Select is active
 	bool bOrbitActive = false;
@@ -324,4 +349,7 @@ protected:
 
 	UPROPERTY(EditAnywhere, Category = "ArchVis|Debug")
 	bool bInputDebugEnabled = false;
+
+	UPROPERTY(EditAnywhere, Category = "ArchVis|Debug")
+	bool bSelectionDebugEnabled = false;
 };

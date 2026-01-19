@@ -11,6 +11,8 @@
 #include "RTPlanToolManager.h"
 #include "RTPlanToolBase.h"
 #include "Tools/RTPlanLineTool.h"
+#include "Tools/RTPlanSelectTool.h"
+#include "RTPlanShellActor.h"
 #include "Kismet/GameplayStatics.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
@@ -118,16 +120,8 @@ void AArchVisPlayerController::BeginPlay()
 	// Set up initial Input Mapping Contexts
 	UpdateInputMappingContexts();
 
-	// Select default tool (Select tool for 2D mode)
-	if (AArchVisGameMode* GM = Cast<AArchVisGameMode>(UGameplayStatics::GetGameMode(this)))
-	{
-		if (URTPlanToolManager* ToolMgr = GM->GetToolManager())
-		{
-			ToolMgr->SelectToolByType(ERTPlanToolType::Select);
-			Current2DToolMode = EArchVis2DToolMode::Selection;
-			UE_LOG(LogArchVisPC, Log, TEXT("Default tool set to Select"));
-		}
-	}
+	// Note: Selection system setup is deferred to OnGameModeReady() because
+	// GameMode::StartPlay creates ToolManager and ShellActor AFTER BeginPlay
 
 	// Debug: Log current state
 	UE_LOG(LogArchVisPC, Log, TEXT("BeginPlay Complete:"));
@@ -135,6 +129,25 @@ void AArchVisPlayerController::BeginPlay()
 	UE_LOG(LogArchVisPC, Log, TEXT("  - PawnType: %d"), static_cast<int32>(CurrentPawnType));
 	UE_LOG(LogArchVisPC, Log, TEXT("  - InputConfig: %s"), InputConfig ? *InputConfig->GetName() : TEXT("NULL"));
 	UE_LOG(LogArchVisPC, Log, TEXT("  - InteractionMode: %s"), CurrentInteractionMode == EArchVisInteractionMode::Drafting2D ? TEXT("2D") : TEXT("3D"));
+}
+
+void AArchVisPlayerController::OnGameModeReady()
+{
+	AArchVisGameMode* GM = Cast<AArchVisGameMode>(UGameplayStatics::GetGameMode(this));
+	if (!GM) return;
+
+	// Set up selection system now that ToolManager and ShellActor exist
+	if (URTPlanToolManager* ToolMgr = GM->GetToolManager())
+	{
+		ToolMgr->SelectToolByType(ERTPlanToolType::Select);
+		Current2DToolMode = EArchVis2DToolMode::Selection;
+
+		// Bind to selection changed event
+		if (URTPlanSelectTool* SelectTool = ToolMgr->GetSelectTool())
+		{
+			SelectTool->OnSelectionChanged.AddDynamic(this, &AArchVisPlayerController::HandleSelectionChanged);
+		}
+	}
 }
 
 void AArchVisPlayerController::SetupInputComponent()
@@ -195,6 +208,10 @@ void AArchVisPlayerController::SetupInputComponent()
 		{
 			EIC->BindAction(InputConfig->IA_Save, ETriggerEvent::Started, this, &AArchVisPlayerController::OnSave);
 		}
+		if (InputConfig->IA_FocusSelection)
+		{
+			EIC->BindAction(InputConfig->IA_FocusSelection, ETriggerEvent::Started, this, &AArchVisPlayerController::OnFocusSelection);
+		}
 
 		// Tool hotkeys
 		if (InputConfig->IA_ToolSelect)
@@ -227,10 +244,17 @@ void AArchVisPlayerController::SetupInputComponent()
 		if (InputConfig->IA_SelectAdd)
 		{
 			EIC->BindAction(InputConfig->IA_SelectAdd, ETriggerEvent::Started, this, &AArchVisPlayerController::OnSelectAdd);
+			EIC->BindAction(InputConfig->IA_SelectAdd, ETriggerEvent::Completed, this, &AArchVisPlayerController::OnSelectAddCompleted);
 		}
 		if (InputConfig->IA_SelectToggle)
 		{
 			EIC->BindAction(InputConfig->IA_SelectToggle, ETriggerEvent::Started, this, &AArchVisPlayerController::OnSelectToggle);
+			EIC->BindAction(InputConfig->IA_SelectToggle, ETriggerEvent::Completed, this, &AArchVisPlayerController::OnSelectToggleCompleted);
+		}
+		if (InputConfig->IA_SelectRemove)
+		{
+			EIC->BindAction(InputConfig->IA_SelectRemove, ETriggerEvent::Started, this, &AArchVisPlayerController::OnSelectRemove);
+			EIC->BindAction(InputConfig->IA_SelectRemove, ETriggerEvent::Completed, this, &AArchVisPlayerController::OnSelectRemoveCompleted);
 		}
 		if (InputConfig->IA_SelectAll)
 		{
@@ -695,74 +719,143 @@ void AArchVisPlayerController::OnToggleView(const FInputActionValue& Value)
 
 void AArchVisPlayerController::OnSelectStarted(const FInputActionValue& Value)
 {
+	// Check modifier keys directly from the input system
+	bool bShiftHeld = IsInputKeyDown(EKeys::LeftShift) || IsInputKeyDown(EKeys::RightShift);
+	bool bCtrlHeld = IsInputKeyDown(EKeys::LeftControl) || IsInputKeyDown(EKeys::RightControl);
+	bool bAltHeld = IsInputKeyDown(EKeys::LeftAlt) || IsInputKeyDown(EKeys::RightAlt);
+	
+	UE_LOG(LogArchVisPC, Log, TEXT(">>> OnSelectStarted: Shift=%d, Ctrl=%d, Alt=%d"), 
+		bShiftHeld, bCtrlHeld, bAltHeld);
+	
+	// Determine selection mode based on modifiers
+	if (bShiftHeld)
+	{
+		CurrentSelectionMode = ESelectionMode::Add;
+		UE_LOG(LogArchVisPC, Log, TEXT("    -> ADD mode (Shift held)"));
+	}
+	else if (bCtrlHeld)
+	{
+		CurrentSelectionMode = ESelectionMode::Toggle;
+		UE_LOG(LogArchVisPC, Log, TEXT("    -> TOGGLE mode (Ctrl held)"));
+	}
+	else if (bAltHeld && CurrentInteractionMode == EArchVisInteractionMode::Drafting2D)
+	{
+		// Alt+Click for remove only in 2D mode (in 3D, Alt is for orbit)
+		CurrentSelectionMode = ESelectionMode::Remove;
+		UE_LOG(LogArchVisPC, Log, TEXT("    -> REMOVE mode (Alt held in 2D)"));
+	}
+	else
+	{
+		CurrentSelectionMode = ESelectionMode::Replace;
+		UE_LOG(LogArchVisPC, Log, TEXT("    -> REPLACE mode"));
+	}
+	
 	bSelectActionActive = true;
 	
-	if (bInputDebugEnabled)
-	{
-		UE_LOG(LogArchVisPC, Log, TEXT("OnSelectStarted: bAltDown=%d"), bAltDown);
-	}
+	AArchVisGameMode* GM = Cast<AArchVisGameMode>(UGameplayStatics::GetGameMode(this));
+	if (!GM) return;
 	
-	// Note: Orbit handling (Alt + LMB) is now done via IA_Orbit action in OrbitInputComponent
-	// This OnSelectStarted is for tool selection only
+	URTPlanToolManager* ToolMgr = GM->GetToolManager();
+	if (!ToolMgr) return;
 	
-	// If Alt is held, ignore this for tool selection (it's orbit mode)
-	if (bAltDown)
-	{
-		return;
-	}
-	
-	if (AArchVisGameMode* GM = Cast<AArchVisGameMode>(UGameplayStatics::GetGameMode(this)))
-	{
-		if (URTPlanToolManager* ToolMgr = GM->GetToolManager())
-		{
-			URTPlanToolBase* ActiveTool = ToolMgr->GetActiveTool();
-			
-			if (bInputDebugEnabled)
-			{
-				UE_LOG(LogArchVisPC, Log, TEXT("OnSelectStarted: ActiveTool=%s, ToolType=%d"), 
-					ActiveTool ? *ActiveTool->GetClass()->GetName() : TEXT("NULL"),
-					static_cast<int32>(ToolMgr->GetActiveToolType()));
-			}
-			
-			ToolMgr->ProcessInput(GetPointerEvent(ERTPointerAction::Down));
-		}
-	}
+	FRTPointerEvent Event = GetPointerEvent(ERTPointerAction::Down);
+	Event.bShiftDown = (CurrentSelectionMode == ESelectionMode::Add);
+	Event.bAltDown = (CurrentSelectionMode == ESelectionMode::Remove);
+	Event.bCtrlDown = (CurrentSelectionMode == ESelectionMode::Toggle);
+	ToolMgr->ProcessInput(Event);
 }
 
 void AArchVisPlayerController::OnSelectCompleted(const FInputActionValue& Value)
 {
-	bSelectActionActive = false;
+	UE_LOG(LogArchVisPC, Log, TEXT(">>> OnSelectCompleted: bSelectActionActive=%d, Mode=%d"), 
+		bSelectActionActive, static_cast<int32>(CurrentSelectionMode));
 	
-	if (bInputDebugEnabled)
+	if (!bSelectActionActive)
 	{
-		UE_LOG(LogArchVisPC, Log, TEXT("OnSelectCompleted"));
+		return;
 	}
 	
-	// Note: Orbit handling is done by OrbitInputComponent via IA_Orbit action
+	bSelectActionActive = false;
+	
+	AArchVisGameMode* GM = Cast<AArchVisGameMode>(UGameplayStatics::GetGameMode(this));
+	if (!GM) return;
+	
+	URTPlanToolManager* ToolMgr = GM->GetToolManager();
+	if (!ToolMgr) return;
+	
+	FRTPointerEvent Event = GetPointerEvent(ERTPointerAction::Up);
+	Event.bShiftDown = (CurrentSelectionMode == ESelectionMode::Add);
+	Event.bAltDown = (CurrentSelectionMode == ESelectionMode::Remove);
+	Event.bCtrlDown = (CurrentSelectionMode == ESelectionMode::Toggle);
+	ToolMgr->ProcessInput(Event);
 }
 
+// Keep these for backwards compatibility but they now just delegate to OnSelectStarted
 void AArchVisPlayerController::OnSelectAdd(const FInputActionValue& Value)
 {
-	// Shift+Click - handled via modifier flags in pointer event
-	OnSelectStarted(Value);
+	UE_LOG(LogArchVisPC, Log, TEXT("OnSelectAdd triggered"));
+	// This is handled by OnSelectStarted checking shift key
+}
+
+void AArchVisPlayerController::OnSelectAddCompleted(const FInputActionValue& Value)
+{
+	// Handled by OnSelectCompleted
 }
 
 void AArchVisPlayerController::OnSelectToggle(const FInputActionValue& Value)
 {
-	// Ctrl+Click - handled via modifier flags in pointer event
-	OnSelectStarted(Value);
+	UE_LOG(LogArchVisPC, Log, TEXT("OnSelectToggle triggered"));
+	// This is handled by OnSelectStarted checking ctrl key
+}
+
+void AArchVisPlayerController::OnSelectToggleCompleted(const FInputActionValue& Value)
+{
+	// Handled by OnSelectCompleted
+}
+
+void AArchVisPlayerController::OnSelectRemove(const FInputActionValue& Value)
+{
+	UE_LOG(LogArchVisPC, Log, TEXT("OnSelectRemove triggered"));
+	// This is handled by OnSelectStarted checking alt key
+}
+
+void AArchVisPlayerController::OnSelectRemoveCompleted(const FInputActionValue& Value)
+{
+	// Handled by OnSelectCompleted
 }
 
 void AArchVisPlayerController::OnSelectAll(const FInputActionValue& Value)
 {
-	// TODO: Select all via tool manager
-	UE_LOG(LogArchVisPC, Log, TEXT("Select All triggered"));
+	UE_LOG(LogArchVisPC, Log, TEXT("OnSelectAll triggered"));
+	
+	AArchVisGameMode* GM = Cast<AArchVisGameMode>(UGameplayStatics::GetGameMode(this));
+	if (!GM) return;
+	
+	URTPlanToolManager* ToolMgr = GM->GetToolManager();
+	if (!ToolMgr) return;
+	
+	URTPlanSelectTool* SelectTool = ToolMgr->GetSelectTool();
+	if (SelectTool)
+	{
+		SelectTool->SelectAll();
+	}
 }
 
 void AArchVisPlayerController::OnDeselectAll(const FInputActionValue& Value)
 {
-	// TODO: Deselect all via tool manager
-	UE_LOG(LogArchVisPC, Log, TEXT("Deselect All triggered"));
+	UE_LOG(LogArchVisPC, Log, TEXT("OnDeselectAll triggered"));
+	
+	AArchVisGameMode* GM = Cast<AArchVisGameMode>(UGameplayStatics::GetGameMode(this));
+	if (!GM) return;
+	
+	URTPlanToolManager* ToolMgr = GM->GetToolManager();
+	if (!ToolMgr) return;
+	
+	URTPlanSelectTool* SelectTool = ToolMgr->GetSelectTool();
+	if (SelectTool)
+	{
+		SelectTool->ClearSelection();
+	}
 }
 
 void AArchVisPlayerController::OnBoxSelectStart(const FInputActionValue& Value)
@@ -788,6 +881,35 @@ void AArchVisPlayerController::OnBoxSelectEnd(const FInputActionValue& Value)
 void AArchVisPlayerController::OnCycleSelection(const FInputActionValue& Value)
 {
 	// TODO: Cycle through overlapping selections
+}
+
+void AArchVisPlayerController::HandleSelectionChanged()
+{
+	AArchVisGameMode* GM = Cast<AArchVisGameMode>(UGameplayStatics::GetGameMode(this));
+	if (!GM) return;
+
+	URTPlanToolManager* ToolMgr = GM->GetToolManager();
+	ARTPlanShellActor* ShellActor = GM->GetShellActor();
+	
+	if (!ToolMgr) return;
+
+	URTPlanSelectTool* SelectTool = ToolMgr->GetSelectTool();
+	if (!SelectTool) return;
+
+	// Get selected wall IDs
+	TArray<FGuid> SelectedWalls = SelectTool->GetSelectedWallIds();
+
+	// Update shell actor highlighting
+	if (ShellActor)
+	{
+		ShellActor->SetSelectedWalls(SelectedWalls);
+	}
+
+	// Log wall properties to output
+	if (SelectedWalls.Num() > 0)
+	{
+		SelectTool->LogSelectedWallProperties();
+	}
 }
 
 // ============================================
@@ -1139,7 +1261,64 @@ void AArchVisPlayerController::OnViewPerspective(const FInputActionValue& Value)
 	UE_LOG(LogArchVisPC, Log, TEXT("View Perspective toggle triggered"));
 }
 
-// ============================================
+void AArchVisPlayerController::OnFocusSelection(const FInputActionValue& Value)
+{
+	UE_LOG(LogArchVisPC, Log, TEXT("OnFocusSelection triggered"));
+	
+	AArchVisGameMode* GM = Cast<AArchVisGameMode>(UGameplayStatics::GetGameMode(this));
+	if (!GM) return;
+	
+	URTPlanToolManager* ToolMgr = GM->GetToolManager();
+	if (!ToolMgr) return;
+	
+	URTPlanSelectTool* SelectTool = ToolMgr->GetSelectTool();
+	if (!SelectTool || !SelectTool->HasSelection())
+	{
+		UE_LOG(LogArchVisPC, Log, TEXT("  No selection to focus on"));
+		return;
+	}
+	
+	FVector SelectionCenter = SelectTool->GetSelectionCenter();
+	FBox SelectionBounds = SelectTool->GetSelectionBounds();
+	
+	UE_LOG(LogArchVisPC, Log, TEXT("  Selection center: (%0.1f, %0.1f, %0.1f)"), 
+		SelectionCenter.X, SelectionCenter.Y, SelectionCenter.Z);
+	UE_LOG(LogArchVisPC, Log, TEXT("  Selection bounds: Min(%0.1f, %0.1f, %0.1f) Max(%0.1f, %0.1f, %0.1f)"),
+		SelectionBounds.Min.X, SelectionBounds.Min.Y, SelectionBounds.Min.Z,
+		SelectionBounds.Max.X, SelectionBounds.Max.Y, SelectionBounds.Max.Z);
+	
+	// Get the current pawn and move it to focus on selection
+	if (APawn* CurrentPawn = GetPawn())
+	{
+		// Calculate appropriate distance based on bounds size
+		float BoundsRadius = SelectionBounds.GetExtent().Size();
+		float FocusDistance = FMath::Max(BoundsRadius * 2.0f, 500.0f);
+		
+		if (CurrentInteractionMode == EArchVisInteractionMode::Drafting2D)
+		{
+			// For 2D mode, just move the camera above the selection center
+			FVector NewLocation = FVector(SelectionCenter.X, SelectionCenter.Y, CurrentPawn->GetActorLocation().Z);
+			CurrentPawn->SetActorLocation(NewLocation);
+			UE_LOG(LogArchVisPC, Log, TEXT("  2D focus: Moved to (%0.1f, %0.1f)"), NewLocation.X, NewLocation.Y);
+		}
+		else
+		{
+			// For 3D mode, position camera looking at the selection center
+			FVector CameraOffset = FVector(-FocusDistance, 0, FocusDistance * 0.5f);
+			FVector NewLocation = SelectionCenter + CameraOffset;
+			
+			// Calculate rotation to look at selection center
+			FVector LookDirection = (SelectionCenter - NewLocation).GetSafeNormal();
+			FRotator NewRotation = LookDirection.Rotation();
+			
+			CurrentPawn->SetActorLocation(NewLocation);
+			CurrentPawn->SetActorRotation(NewRotation);
+			
+			UE_LOG(LogArchVisPC, Log, TEXT("  3D focus: Moved to (%0.1f, %0.1f, %0.1f), looking at center"),
+				NewLocation.X, NewLocation.Y, NewLocation.Z);
+		}
+	}
+}// ============================================
 // TOOL HOTKEY HANDLERS
 // ============================================
 
@@ -1322,8 +1501,14 @@ void AArchVisPlayerController::OnRedo(const FInputActionValue& Value)
 
 void AArchVisPlayerController::OnDelete(const FInputActionValue& Value)
 {
-	// TODO: Delete selected objects
-	UE_LOG(LogTemp, Log, TEXT("Delete triggered"));
+	if (AArchVisGameMode* GM = Cast<AArchVisGameMode>(UGameplayStatics::GetGameMode(this)))
+	{
+		if (URTPlanToolManager* ToolMgr = GM->GetToolManager())
+		{
+			ToolMgr->DeleteSelection();
+			UE_LOG(LogArchVisPC, Log, TEXT("Delete selection triggered"));
+		}
+	}
 }
 
 void AArchVisPlayerController::OnEscape(const FInputActionValue& Value)
@@ -1615,6 +1800,30 @@ void AArchVisPlayerController::ArchVisSetInputDebug(int32 bEnabled)
 	{
 		OrbitPawn->SetDebugEnabled(bInputDebugEnabled);
 	}
+}
+
+void AArchVisPlayerController::SetSelectionDebugEnabled(bool bEnabled)
+{
+	bSelectionDebugEnabled = bEnabled;
+	UE_LOG(LogArchVisPC, Log, TEXT("Selection debug: %s"), bSelectionDebugEnabled ? TEXT("ON") : TEXT("OFF"));
+	
+	// Sync with SelectTool
+	AArchVisGameMode* GM = Cast<AArchVisGameMode>(UGameplayStatics::GetGameMode(this));
+	if (GM)
+	{
+		if (URTPlanToolManager* ToolMgr = GM->GetToolManager())
+		{
+			if (URTPlanSelectTool* SelectTool = ToolMgr->GetSelectTool())
+			{
+				SelectTool->SetDebugEnabled(bSelectionDebugEnabled);
+			}
+		}
+	}
+}
+
+void AArchVisPlayerController::ArchVisToggleSelectionDebug()
+{
+	SetSelectionDebugEnabled(!bSelectionDebugEnabled);
 }
 
 

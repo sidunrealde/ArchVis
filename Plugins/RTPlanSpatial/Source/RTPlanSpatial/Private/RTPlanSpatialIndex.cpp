@@ -1,5 +1,7 @@
 ﻿#include "RTPlanSpatialIndex.h"
 #include "RTPlanGeometryUtils.h"
+#include "DrawDebugHelpers.h"
+#include "Engine/World.h"
 
 void FRTPlanSpatialIndex::Build(const URTPlanDocument* Document)
 {
@@ -9,9 +11,14 @@ void FRTPlanSpatialIndex::Build(const URTPlanDocument* Document)
 	UniqueY.Empty();
 	CachedDocument = Document;
 
-	if (!Document) return;
+	if (!Document)
+	{
+		return;
+	}
 
 	const FRTPlanData& Data = Document->GetData();
+	
+	UE_LOG(LogTemp, Verbose, TEXT("SpatialIndex::Build: %d vertices, %d walls"), Data.Vertices.Num(), Data.Walls.Num());
 
 	// Collect Vertices (Endpoints)
 	for (const auto& Pair : Data.Vertices)
@@ -45,8 +52,13 @@ void FRTPlanSpatialIndex::Build(const URTPlanDocument* Document)
 			Seg.B = B;
 			Seg.WallId = Wall.Id;
 			SnapSegments.Add(Seg);
+			
+			UE_LOG(LogTemp, Verbose, TEXT("  Wall %s: (%0.1f,%0.1f)->(%0.1f,%0.1f)"), 
+				*Wall.Id.ToString().Left(8), A.X, A.Y, B.X, B.Y);
 		}
 	}
+	
+	UE_LOG(LogTemp, Log, TEXT("SpatialIndex: Built with %d segments"), SnapSegments.Num());
 }
 
 FRTSnapResult FRTPlanSpatialIndex::QuerySnap(const FVector2D& CursorPos, float Radius) const
@@ -130,15 +142,22 @@ FGuid FRTPlanSpatialIndex::HitTestWall(const FVector2D& Point, float Tolerance) 
 	FGuid BestWallId;
 	float BestDistance = Tolerance;
 
+	UE_LOG(LogTemp, Verbose, TEXT("HitTestWall: Point=(%0.1f, %0.1f), Tolerance=%0.1f, NumSegments=%d"),
+		Point.X, Point.Y, Tolerance, SnapSegments.Num());
+
 	for (const FSnapSegment& Seg : SnapSegments)
 	{
 		FVector2D Closest = FRTPlanGeometryUtils::ClosestPointOnSegment(Point, Seg.A, Seg.B);
 		float Dist = FVector2D::Distance(Point, Closest);
 
+		UE_LOG(LogTemp, Verbose, TEXT("  Segment %s: (%0.1f,%0.1f)->(%0.1f,%0.1f), Closest=(%0.1f,%0.1f), Dist=%0.1f"),
+			*Seg.WallId.ToString().Left(8), Seg.A.X, Seg.A.Y, Seg.B.X, Seg.B.Y, Closest.X, Closest.Y, Dist);
+
 		if (Dist < BestDistance)
 		{
 			BestDistance = Dist;
 			BestWallId = Seg.WallId;
+			UE_LOG(LogTemp, Verbose, TEXT("    -> New best!"));
 		}
 	}
 
@@ -149,6 +168,9 @@ TArray<FGuid> FRTPlanSpatialIndex::HitTestWallsInRect(const FVector2D& RectMin, 
 {
 	TArray<FGuid> HitWalls;
 
+	UE_LOG(LogTemp, Verbose, TEXT("HitTestWallsInRect: Min=(%0.1f, %0.1f), Max=(%0.1f, %0.1f), NumSegments=%d"),
+		RectMin.X, RectMin.Y, RectMax.X, RectMax.Y, SnapSegments.Num());
+
 	for (const FSnapSegment& Seg : SnapSegments)
 	{
 		// Check if either endpoint is inside the rect
@@ -156,6 +178,9 @@ TArray<FGuid> FRTPlanSpatialIndex::HitTestWallsInRect(const FVector2D& RectMin, 
 		                 Seg.A.Y >= RectMin.Y && Seg.A.Y <= RectMax.Y);
 		bool bBInside = (Seg.B.X >= RectMin.X && Seg.B.X <= RectMax.X && 
 		                 Seg.B.Y >= RectMin.Y && Seg.B.Y <= RectMax.Y);
+
+		UE_LOG(LogTemp, Verbose, TEXT("  Segment (%0.1f,%0.1f)->(%0.1f,%0.1f): AInside=%d, BInside=%d"),
+			Seg.A.X, Seg.A.Y, Seg.B.X, Seg.B.Y, bAInside, bBInside);
 
 		if (bAInside || bBInside)
 		{
@@ -256,3 +281,19 @@ TArray<FGuid> FRTPlanSpatialIndex::HitTestOpeningsInRect(const FVector2D& RectMi
 	return HitOpenings;
 }
 
+void FRTPlanSpatialIndex::DrawDebugSegments(UWorld* World, float Duration) const
+{
+	if (!World) return;
+	
+	for (const FSnapSegment& Seg : SnapSegments)
+	{
+		FVector Start(Seg.A.X, Seg.A.Y, 5.0f);  // Slightly above ground
+		FVector End(Seg.B.X, Seg.B.Y, 5.0f);
+		
+		DrawDebugLine(World, Start, End, FColor::Cyan, false, Duration, 0, 3.0f);
+		DrawDebugSphere(World, Start, 10.0f, 6, FColor::Magenta, false, Duration);
+		DrawDebugSphere(World, End, 10.0f, 6, FColor::Magenta, false, Duration);
+	}
+	
+	UE_LOG(LogTemp, Log, TEXT("DrawDebugSegments: Drew %d segments"), SnapSegments.Num());
+}

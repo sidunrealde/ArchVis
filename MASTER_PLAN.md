@@ -2,8 +2,8 @@
 
 > **Goal**: A CAD-like drafting experience for runtime architectural planning in Unreal Engine, supporting seamless 2D/3D switching, precision input, and auto-generation of shell geometry.
 
-**Last Updated**: January 15, 2026  
-**Current Focus**: Line/Polyline Tool Numeric Input Implementation
+**Last Updated**: January 19, 2026  
+**Current Focus**: 2D/3D Navigation Polish & Virtual Cursor Fixes
 
 ---
 
@@ -43,8 +43,8 @@
 | Component | Status | Description |
 |-----------|--------|-------------|
 | `UArchVisInputComponent` | ✅ Base | Abstract base for pawn-specific input handling |
-| `UDraftingInputComponent` | ✅ Done | 2D pan/zoom - attached to DraftingPawn |
-| `UOrbitInputComponent` | ✅ Done | 3D orbit/pan/dolly/fly - attached to OrbitPawn |
+| `UDraftingInputComponent` | ✅ Done | 2D pan/zoom (1:1 cursor-to-scene movement with interpolation) - attached to DraftingPawn |
+| `UOrbitInputComponent` | ✅ Done | 3D orbit/pan/dolly/fly/WASD movement with adjustable speed - attached to OrbitPawn |
 | `UToolInputComponent` | ✅ Done | Tool actions (draw/select) - attached to Controller |
 | `UFirstPersonInputComponent` | ⏳ TODO | FPS movement - for FirstPersonPawn |
 | `UThirdPersonInputComponent` | ⏳ TODO | TPS camera/movement - for ThirdPersonPawn |
@@ -94,7 +94,7 @@ AArchVisOrbitPawn
 | Phase | Description | Status |
 |-------|-------------|--------|
 | **Phase 0** | Baseline plumbing (game ↔ plugins) | ✅ Complete |
-| **Phase 1** | Viewport & Input (CAD Feel) | ✅ Complete (input assets + pawn system) |
+| **Phase 1** | Viewport & Input (CAD Feel) | ✅ Complete (input assets + pawn system + navigation polished) |
 | **Phase 2** | Wall Tool 2.0 (Click-Move-Click) | ✅ Complete (all drawing features done) |
 | **Phase 3** | 2D Visualization | ⏳ 30% (crosshair done, plan drawing pending) |
 | **Phase 4** | Room Detection & Generation | ❌ Not Started |
@@ -132,6 +132,7 @@ All Input Actions have been created in `Content/Input/Actions/`:
 - `IA_Orbit`, `IA_OrbitDelta`
 - `IA_PointerPosition`, `IA_ResetView`, `IA_FocusSelection`
 - `IA_SnapToggle`, `IA_GridToggle`
+- `IA_Move`, `IA_MoveUp`, `IA_MoveDown`, `IA_AdjustFlySpeed` (3D fly mode)
 
 **Selection Actions (`SelectionAction/`):**
 - `IA_Select`, `IA_SelectAdd`, `IA_SelectToggle`
@@ -182,34 +183,44 @@ This section tracks the implementation of C++ handlers for each Input Action.
 #### View/Navigation Actions - 2D Mode
 | Action | Handler | Status | Notes |
 |--------|---------|--------|-------|
-| `IA_Pan` | `OnPanStarted/Completed` | ⏳ Pending | Set `bPanning` state |
-| `IA_PanDelta` | `OnPanDelta` | ⏳ Pending | Move camera XY |
-| `IA_Zoom` | `OnZoom` | ⏳ Pending | Adjust ortho width / FOV |
-| `IA_PointerPosition` | `OnPointerPosition` | ⏳ Pending | Update virtual cursor |
+| `IA_Pan` | `OnPanStarted/Completed` | ✅ Done | Set `bPanning` state |
+| `IA_PanDelta` | `OnPanDelta` | ✅ Done | 1:1 cursor-to-scene pan with interpolation |
+| `IA_Zoom` | `OnZoom` | ✅ Done | Adjust ortho width |
+| `IA_PointerPosition` | `OnPointerPosition` | ✅ Done | Update virtual cursor |
 | `IA_ResetView` | `OnResetView` | ✅ Done | Reset camera to default |
-| `IA_FocusSelection` | `OnFocusSelection` | ⏳ Pending | Frame selected objects |
+| `IA_FocusSelection` | `OnFocusSelection` | 🔴 Broken | Not working properly in 2D and 3D mode |
 | `IA_SnapToggle` | `OnSnapToggle` | ⏳ Pending | Toggle snap on/off |
 | `IA_GridToggle` | `OnGridToggle` | ⏳ Pending | Toggle grid visibility |
 
 #### View/Navigation Actions - 3D Mode
 | Action | Handler | Status | Notes |
 |--------|---------|--------|-------|
-| `IA_Orbit` | `OnOrbitStarted/Completed` | ⏳ Pending | Set `bOrbiting` state |
-| `IA_OrbitDelta` | `OnOrbitDelta` | ⏳ Pending | Rotate camera around target |
+| `IA_Orbit` | `OnOrbitStarted/Completed` | ✅ Done | Set `bOrbiting` state |
+| `IA_OrbitDelta` | `OnOrbitDelta` | ✅ Done | Rotate camera around target |
+| `IA_Move` | `OnMove` | ✅ Done | WASD fly movement (X=right/left, Y=forward/back) |
+| `IA_AdjustFlySpeed` | `OnAdjustFlySpeed` | ✅ Done | RMB+Scroll adjusts fly speed |
 
 ### Priority 2: Selection Tool
 
+> ⚠️ **KNOWN ISSUES:**
+> - Selection currently uses raw keyboard input (`IsInputKeyDown`) instead of Enhanced Input for modifiers
+> - Marquee selection is not working in 2D mode
+> - SelectAll and DeselectAll are not working
+> - Focus selection is not working properly in both 2D and 3D mode
+> - Need to migrate to use `IA_SelectAdd`, `IA_SelectToggle`, `IA_SelectRemove` properly
+
 | Action | Handler | Status | Notes |
 |--------|---------|--------|-------|
-| `IA_Select` | `OnSelect` | ⏳ Pending | Route to SelectTool click |
-| `IA_SelectAdd` | (via modifier) | ⏳ Pending | Shift+Click handled via modifier state |
-| `IA_SelectToggle` | (via modifier) | ⏳ Pending | Ctrl+Click handled via modifier state |
-| `IA_SelectAll` | `OnSelectAll` | ⏳ Pending | Select all walls |
-| `IA_DeselectAll` | `OnDeselectAll` | ⏳ Pending | Clear selection |
+| `IA_Select` | `OnSelectStarted/Completed` | ⚠️ Partial | Basic click selection works, uses raw input for modifiers |
+| `IA_SelectAdd` | `OnSelectAdd` | 🔴 Broken | Shift+Click - handler exists but not using Enhanced Input properly |
+| `IA_SelectToggle` | `OnSelectToggle` | 🔴 Broken | Ctrl+Click - handler exists but not using Enhanced Input properly |
+| `IA_SelectRemove` | `OnSelectRemove` | 🔴 Broken | Alt+Click - handler exists but not using Enhanced Input properly |
+| `IA_SelectAll` | `OnSelectAll` | 🔴 Broken | Handler exists but not working |
+| `IA_DeselectAll` | `OnDeselectAll` | 🔴 Broken | Handler exists but not working |
 | `IA_CycleSelection` | `OnCycleSelection` | ⏳ Pending | Cycle overlapping objects |
-| `IA_BoxSelectStart` | `OnBoxSelectStart` | ⏳ Pending | Begin marquee |
-| `IA_BoxSelectDrag` | `OnBoxSelectDrag` | ⏳ Pending | Update marquee rect |
-| `IA_BoxSelectEnd` | `OnBoxSelectEnd` | ⏳ Pending | Complete marquee selection |
+| `IA_BoxSelectStart` | `OnBoxSelectStart` | 🔴 Broken | Marquee not working in 2D mode |
+| `IA_BoxSelectDrag` | `OnBoxSelectDrag` | 🔴 Broken | Marquee not working in 2D mode |
+| `IA_BoxSelectEnd` | `OnBoxSelectEnd` | 🔴 Broken | Marquee not working in 2D mode |
 
 ### Priority 3: Drawing Tools
 
@@ -271,9 +282,11 @@ This section tracks the implementation of C++ handlers for each Input Action.
 ### Step 3: Implement View Controls
 ```
 [x] IA_ToggleView → CameraController->ToggleViewMode()
-[x] IA_Pan/IA_PanDelta → CameraController pan logic
+[x] IA_Pan/IA_PanDelta → CameraController pan logic (1:1 cursor tracking with interpolation)
 [x] IA_Zoom → CameraController zoom logic
 [x] IA_Orbit/IA_OrbitDelta → CameraController orbit logic (3D mode)
+[x] IA_Move → WASD fly movement (axis corrected: Y=forward/back, X=right/left)
+[x] IA_AdjustFlySpeed → RMB+Scroll adjusts fly speed
 [x] IA_ResetView → CameraController->ResetView()
 ```
 

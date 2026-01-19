@@ -1,6 +1,7 @@
 ﻿#include "RTPlanToolManager.h"
 #include "Tools/RTPlanSelectTool.h"
 #include "Tools/RTPlanLineTool.h"
+#include "RTPlanCommand.h"
 
 void URTPlanToolManager::Initialize(URTPlanDocument* InDoc)
 {
@@ -10,6 +11,7 @@ void URTPlanToolManager::Initialize(URTPlanDocument* InDoc)
 		// Listen for changes to rebuild the index
 		Document->OnPlanChanged.AddDynamic(this, &URTPlanToolManager::UpdateSpatialIndex);
 	}
+	
 	UpdateSpatialIndex();
 	
 	// Create and cache the select tool for selection state queries
@@ -48,10 +50,6 @@ void URTPlanToolManager::SelectTool(TSubclassOf<URTPlanToolBase> ToolClass)
 
 void URTPlanToolManager::SelectToolByType(ERTPlanToolType ToolType)
 {
-	UE_LOG(LogTemp, Log, TEXT("SelectToolByType: %d, CachedSelectTool=%s"), 
-		static_cast<int32>(ToolType), 
-		CachedSelectTool ? TEXT("Valid") : TEXT("NULL"));
-	
 	if (ActiveTool)
 	{
 		ActiveTool->OnExit();
@@ -68,11 +66,9 @@ void URTPlanToolManager::SelectToolByType(ERTPlanToolType ToolType)
 		if (ActiveTool)
 		{
 			ActiveTool->OnEnter();
-			UE_LOG(LogTemp, Log, TEXT("Select tool activated"));
 		}
 		else
 		{
-			UE_LOG(LogTemp, Warning, TEXT("CachedSelectTool is NULL! Creating new one."));
 			CachedSelectTool = NewObject<URTPlanSelectTool>(this);
 			CachedSelectTool->Init(Document, &SpatialIndex);
 			ActiveTool = CachedSelectTool;
@@ -128,6 +124,42 @@ TArray<FGuid> URTPlanToolManager::GetSelectedOpeningIds() const
 		return CachedSelectTool->GetSelectedOpeningIds();
 	}
 	return TArray<FGuid>();
+}
+
+void URTPlanToolManager::DeleteSelection()
+{
+	if (!Document || !CachedSelectTool) return;
+
+	TArray<FGuid> SelectedWalls = CachedSelectTool->GetSelectedWallIds();
+	TArray<FGuid> SelectedOpenings = CachedSelectTool->GetSelectedOpeningIds();
+
+	if (SelectedWalls.Num() == 0 && SelectedOpenings.Num() == 0)
+	{
+		return;
+	}
+
+	// TODO: Group into a transaction/macro command if we want single undo step
+	// For now, just submit individual commands
+
+	for (const FGuid& WallId : SelectedWalls)
+	{
+		URTCmdDeleteWall* Cmd = NewObject<URTCmdDeleteWall>();
+		Cmd->WallId = WallId;
+		Document->SubmitCommand(Cmd);
+	}
+
+	// TODO: Implement URTCmdDeleteOpening and handle opening deletion
+	/*
+	for (const FGuid& OpeningId : SelectedOpenings)
+	{
+		URTCmdDeleteOpening* Cmd = NewObject<URTCmdDeleteOpening>();
+		Cmd->OpeningId = OpeningId;
+		Document->SubmitCommand(Cmd);
+	}
+	*/
+
+	// Clear selection after deletion
+	CachedSelectTool->ClearSelection();
 }
 
 void URTPlanToolManager::ProcessInput(const FRTPointerEvent& Event)

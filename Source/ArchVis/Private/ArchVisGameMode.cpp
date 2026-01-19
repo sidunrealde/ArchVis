@@ -52,10 +52,10 @@ void AArchVisGameMode::StartPlay()
 	// 3. Spawn Shell Actor (Renderer)
 	FVector Location(0.0f, 0.0f, 0.0f);
 	FRotator Rotation(0.0f, 0.0f, 0.0f);
-	ARTPlanShellActor* Shell = GetWorld()->SpawnActor<ARTPlanShellActor>(ARTPlanShellActor::StaticClass(), Location, Rotation);
-	if (Shell)
+	ShellActor = GetWorld()->SpawnActor<ARTPlanShellActor>(ARTPlanShellActor::StaticClass(), Location, Rotation);
+	if (ShellActor)
 	{
-		Shell->SetDocument(Document);
+		ShellActor->SetDocument(Document);
 		UE_LOG(LogArchVisGM, Log, TEXT("  - ShellActor Spawned and Linked"));
 	}
 	else
@@ -73,5 +73,12 @@ void AArchVisGameMode::StartPlay()
 	else
 	{
 		UE_LOG(LogArchVisGM, Warning, TEXT("  - Failed to spawn NetDriver (Optional)"));
+	}
+
+	// 5. Notify PlayerController that GameMode is ready
+	if (AArchVisPlayerController* PC = Cast<AArchVisPlayerController>(GetWorld()->GetFirstPlayerController()))
+	{
+		PC->OnGameModeReady();
+		UE_LOG(LogArchVisGM, Log, TEXT("  - Notified PlayerController"));
 	}
 }
