@@ -259,10 +259,16 @@ void AArchVisPlayerController::SetupInputComponent()
 		if (InputConfig->IA_SelectAll)
 		{
 			EIC->BindAction(InputConfig->IA_SelectAll, ETriggerEvent::Started, this, &AArchVisPlayerController::OnSelectAll);
+			// Also bind Triggered to catch it if Started misses due to chord timing
+			EIC->BindAction(InputConfig->IA_SelectAll, ETriggerEvent::Triggered, this, &AArchVisPlayerController::OnSelectAll);
+			UE_LOG(LogArchVisPC, Log, TEXT("Bound IA_SelectAll"));
 		}
 		if (InputConfig->IA_DeselectAll)
 		{
 			EIC->BindAction(InputConfig->IA_DeselectAll, ETriggerEvent::Started, this, &AArchVisPlayerController::OnDeselectAll);
+			// Also bind Triggered
+			EIC->BindAction(InputConfig->IA_DeselectAll, ETriggerEvent::Triggered, this, &AArchVisPlayerController::OnDeselectAll);
+			UE_LOG(LogArchVisPC, Log, TEXT("Bound IA_DeselectAll"));
 		}
 		if (InputConfig->IA_BoxSelectStart)
 		{
@@ -719,35 +725,28 @@ void AArchVisPlayerController::OnToggleView(const FInputActionValue& Value)
 
 void AArchVisPlayerController::OnSelectStarted(const FInputActionValue& Value)
 {
-	// Check modifier keys directly from the input system
-	bool bShiftHeld = IsInputKeyDown(EKeys::LeftShift) || IsInputKeyDown(EKeys::RightShift);
-	bool bCtrlHeld = IsInputKeyDown(EKeys::LeftControl) || IsInputKeyDown(EKeys::RightControl);
-	bool bAltHeld = IsInputKeyDown(EKeys::LeftAlt) || IsInputKeyDown(EKeys::RightAlt);
-	
-	UE_LOG(LogArchVisPC, Log, TEXT(">>> OnSelectStarted: Shift=%d, Ctrl=%d, Alt=%d"), 
-		bShiftHeld, bCtrlHeld, bAltHeld);
-	
-	// Determine selection mode based on modifiers
-	if (bShiftHeld)
+	// Determine mode based on active modifiers (tracked via Enhanced Input actions)
+	// This ensures selection works even if specific chorded actions (like Shift+Click)
+	// fail to trigger due to priority or consumption issues.
+	if (bShiftDown)
 	{
 		CurrentSelectionMode = ESelectionMode::Add;
-		UE_LOG(LogArchVisPC, Log, TEXT("    -> ADD mode (Shift held)"));
+		UE_LOG(LogArchVisPC, Log, TEXT(">>> OnSelectStarted (Add Mode - via Modifier)"));
 	}
-	else if (bCtrlHeld)
+	else if (bCtrlDown)
 	{
 		CurrentSelectionMode = ESelectionMode::Toggle;
-		UE_LOG(LogArchVisPC, Log, TEXT("    -> TOGGLE mode (Ctrl held)"));
+		UE_LOG(LogArchVisPC, Log, TEXT(">>> OnSelectStarted (Toggle Mode - via Modifier)"));
 	}
-	else if (bAltHeld && CurrentInteractionMode == EArchVisInteractionMode::Drafting2D)
+	else if (bAltDown)
 	{
-		// Alt+Click for remove only in 2D mode (in 3D, Alt is for orbit)
 		CurrentSelectionMode = ESelectionMode::Remove;
-		UE_LOG(LogArchVisPC, Log, TEXT("    -> REMOVE mode (Alt held in 2D)"));
+		UE_LOG(LogArchVisPC, Log, TEXT(">>> OnSelectStarted (Remove Mode - via Modifier)"));
 	}
 	else
 	{
 		CurrentSelectionMode = ESelectionMode::Replace;
-		UE_LOG(LogArchVisPC, Log, TEXT("    -> REPLACE mode"));
+		UE_LOG(LogArchVisPC, Log, TEXT(">>> OnSelectStarted (Replace Mode)"));
 	}
 	
 	bSelectActionActive = true;
@@ -790,43 +789,12 @@ void AArchVisPlayerController::OnSelectCompleted(const FInputActionValue& Value)
 	ToolMgr->ProcessInput(Event);
 }
 
-// Keep these for backwards compatibility but they now just delegate to OnSelectStarted
 void AArchVisPlayerController::OnSelectAdd(const FInputActionValue& Value)
 {
-	UE_LOG(LogArchVisPC, Log, TEXT("OnSelectAdd triggered"));
-	// This is handled by OnSelectStarted checking shift key
-}
-
-void AArchVisPlayerController::OnSelectAddCompleted(const FInputActionValue& Value)
-{
-	// Handled by OnSelectCompleted
-}
-
-void AArchVisPlayerController::OnSelectToggle(const FInputActionValue& Value)
-{
-	UE_LOG(LogArchVisPC, Log, TEXT("OnSelectToggle triggered"));
-	// This is handled by OnSelectStarted checking ctrl key
-}
-
-void AArchVisPlayerController::OnSelectToggleCompleted(const FInputActionValue& Value)
-{
-	// Handled by OnSelectCompleted
-}
-
-void AArchVisPlayerController::OnSelectRemove(const FInputActionValue& Value)
-{
-	UE_LOG(LogArchVisPC, Log, TEXT("OnSelectRemove triggered"));
-	// This is handled by OnSelectStarted checking alt key
-}
-
-void AArchVisPlayerController::OnSelectRemoveCompleted(const FInputActionValue& Value)
-{
-	// Handled by OnSelectCompleted
-}
-
-void AArchVisPlayerController::OnSelectAll(const FInputActionValue& Value)
-{
-	UE_LOG(LogArchVisPC, Log, TEXT("OnSelectAll triggered"));
+	UE_LOG(LogArchVisPC, Log, TEXT("OnSelectAdd triggered (Add Mode)"));
+	
+	CurrentSelectionMode = ESelectionMode::Add;
+	bSelectActionActive = true;
 	
 	AArchVisGameMode* GM = Cast<AArchVisGameMode>(UGameplayStatics::GetGameMode(this));
 	if (!GM) return;
@@ -834,10 +802,97 @@ void AArchVisPlayerController::OnSelectAll(const FInputActionValue& Value)
 	URTPlanToolManager* ToolMgr = GM->GetToolManager();
 	if (!ToolMgr) return;
 	
+	FRTPointerEvent Event = GetPointerEvent(ERTPointerAction::Down);
+	Event.bShiftDown = true;
+	Event.bAltDown = false;
+	Event.bCtrlDown = false;
+	ToolMgr->ProcessInput(Event);
+}
+
+void AArchVisPlayerController::OnSelectAddCompleted(const FInputActionValue& Value)
+{
+	// Delegate to common completion handler
+	OnSelectCompleted(Value);
+}
+
+void AArchVisPlayerController::OnSelectToggle(const FInputActionValue& Value)
+{
+	UE_LOG(LogArchVisPC, Log, TEXT("OnSelectToggle triggered (Toggle Mode)"));
+	
+	CurrentSelectionMode = ESelectionMode::Toggle;
+	bSelectActionActive = true;
+	
+	AArchVisGameMode* GM = Cast<AArchVisGameMode>(UGameplayStatics::GetGameMode(this));
+	if (!GM) return;
+	
+	URTPlanToolManager* ToolMgr = GM->GetToolManager();
+	if (!ToolMgr) return;
+	
+	FRTPointerEvent Event = GetPointerEvent(ERTPointerAction::Down);
+	Event.bShiftDown = false;
+	Event.bAltDown = false;
+	Event.bCtrlDown = true;
+	ToolMgr->ProcessInput(Event);
+}
+
+void AArchVisPlayerController::OnSelectToggleCompleted(const FInputActionValue& Value)
+{
+	// Delegate to common completion handler
+	OnSelectCompleted(Value);
+}
+
+void AArchVisPlayerController::OnSelectRemove(const FInputActionValue& Value)
+{
+	UE_LOG(LogArchVisPC, Log, TEXT("OnSelectRemove triggered (Remove Mode)"));
+	
+	CurrentSelectionMode = ESelectionMode::Remove;
+	bSelectActionActive = true;
+	
+	AArchVisGameMode* GM = Cast<AArchVisGameMode>(UGameplayStatics::GetGameMode(this));
+	if (!GM) return;
+	
+	URTPlanToolManager* ToolMgr = GM->GetToolManager();
+	if (!ToolMgr) return;
+	
+	FRTPointerEvent Event = GetPointerEvent(ERTPointerAction::Down);
+	Event.bShiftDown = false;
+	Event.bAltDown = true;
+	Event.bCtrlDown = false;
+	ToolMgr->ProcessInput(Event);
+}
+
+void AArchVisPlayerController::OnSelectRemoveCompleted(const FInputActionValue& Value)
+{
+	// Delegate to common completion handler
+	OnSelectCompleted(Value);
+}
+
+void AArchVisPlayerController::OnSelectAll(const FInputActionValue& Value)
+{
+	UE_LOG(LogArchVisPC, Log, TEXT("OnSelectAll triggered"));
+	
+	AArchVisGameMode* GM = Cast<AArchVisGameMode>(UGameplayStatics::GetGameMode(this));
+	if (!GM) 
+	{
+		UE_LOG(LogArchVisPC, Warning, TEXT("OnSelectAll: GM is null"));
+		return;
+	}
+	
+	URTPlanToolManager* ToolMgr = GM->GetToolManager();
+	if (!ToolMgr) 
+	{
+		UE_LOG(LogArchVisPC, Warning, TEXT("OnSelectAll: ToolMgr is null"));
+		return;
+	}
+	
 	URTPlanSelectTool* SelectTool = ToolMgr->GetSelectTool();
 	if (SelectTool)
 	{
 		SelectTool->SelectAll();
+	}
+	else
+	{
+		UE_LOG(LogArchVisPC, Warning, TEXT("OnSelectAll: SelectTool is null"));
 	}
 }
 
@@ -846,15 +901,27 @@ void AArchVisPlayerController::OnDeselectAll(const FInputActionValue& Value)
 	UE_LOG(LogArchVisPC, Log, TEXT("OnDeselectAll triggered"));
 	
 	AArchVisGameMode* GM = Cast<AArchVisGameMode>(UGameplayStatics::GetGameMode(this));
-	if (!GM) return;
+	if (!GM) 
+	{
+		UE_LOG(LogArchVisPC, Warning, TEXT("OnDeselectAll: GM is null"));
+		return;
+	}
 	
 	URTPlanToolManager* ToolMgr = GM->GetToolManager();
-	if (!ToolMgr) return;
+	if (!ToolMgr) 
+	{
+		UE_LOG(LogArchVisPC, Warning, TEXT("OnDeselectAll: ToolMgr is null"));
+		return;
+	}
 	
 	URTPlanSelectTool* SelectTool = ToolMgr->GetSelectTool();
 	if (SelectTool)
 	{
 		SelectTool->ClearSelection();
+	}
+	else
+	{
+		UE_LOG(LogArchVisPC, Warning, TEXT("OnDeselectAll: SelectTool is null"));
 	}
 }
 
@@ -1556,28 +1623,33 @@ void AArchVisPlayerController::OnSave(const FInputActionValue& Value)
 void AArchVisPlayerController::OnModifierCtrlStarted(const FInputActionValue& Value)
 {
 	bCtrlDown = true;
+	UE_LOG(LogArchVisPC, Log, TEXT("Modifier Ctrl Started"));
 }
 
 void AArchVisPlayerController::OnModifierCtrlCompleted(const FInputActionValue& Value)
 {
 	bCtrlDown = false;
+	UE_LOG(LogArchVisPC, Log, TEXT("Modifier Ctrl Completed"));
 }
 
 void AArchVisPlayerController::OnModifierShiftStarted(const FInputActionValue& Value)
 {
 	bShiftDown = true;
 	bSnapModifierHeld = true;
+	UE_LOG(LogArchVisPC, Log, TEXT("Modifier Shift Started"));
 }
 
 void AArchVisPlayerController::OnModifierShiftCompleted(const FInputActionValue& Value)
 {
 	bShiftDown = false;
 	bSnapModifierHeld = false;
+	UE_LOG(LogArchVisPC, Log, TEXT("Modifier Shift Completed"));
 }
 
 void AArchVisPlayerController::OnModifierAltStarted(const FInputActionValue& Value)
 {
 	bAltDown = true;
+	UE_LOG(LogArchVisPC, Log, TEXT("Modifier Alt Started"));
 	
 	if (bInputDebugEnabled)
 	{
@@ -1588,6 +1660,7 @@ void AArchVisPlayerController::OnModifierAltStarted(const FInputActionValue& Val
 void AArchVisPlayerController::OnModifierAltCompleted(const FInputActionValue& Value)
 {
 	bAltDown = false;
+	UE_LOG(LogArchVisPC, Log, TEXT("Modifier Alt Completed"));
 	
 	if (bInputDebugEnabled)
 	{

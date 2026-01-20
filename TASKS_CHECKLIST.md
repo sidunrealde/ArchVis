@@ -10,25 +10,26 @@ Legend: [x] done, [-] partial, [ ] pending
 
 | Issue | Status | Description |
 |-------|--------|-------------|
-| Selection uses raw input | 🔴 Open | `OnSelectStarted` uses `IsInputKeyDown()` for Shift/Ctrl/Alt instead of Enhanced Input actions |
+| Selection uses raw input | 🟢 Fixed | `OnSelectStarted` now uses Enhanced Input actions (`IA_SelectAdd`, `IA_SelectToggle`, `IA_SelectRemove`) |
+| SelectAll uses raw input | 🟢 Fixed | `SelectAll` now uses `IA_SelectAll` Enhanced Input action |
+| DeselectAll uses raw input | 🟢 Fixed | `DeselectAll` now uses `IA_DeselectAll` Enhanced Input action |
 | Marquee selection broken | 🔴 Open | Box/marquee selection not working in 2D mode - world positions not updating correctly |
-| SelectAll not working | 🔴 Open | `IA_SelectAll` handler exists but doesn't trigger `SelectTool->SelectAll()` |
-| DeselectAll not working | 🔴 Open | `IA_DeselectAll` handler exists but doesn't trigger `SelectTool->ClearSelection()` |
 | 3D selection issues | ⚠️ Partial | Line trace may fail in some cases, cursor can snap to horizon |
 
-### Selection System Refactor Needed
-The current selection implementation in `AArchVisPlayerController::OnSelectStarted()` uses raw keyboard input:
-```cpp
-bool bShiftHeld = IsInputKeyDown(EKeys::LeftShift) || IsInputKeyDown(EKeys::RightShift);
-bool bCtrlHeld = IsInputKeyDown(EKeys::LeftControl) || IsInputKeyDown(EKeys::RightControl);
-bool bAltHeld = IsInputKeyDown(EKeys::LeftAlt) || IsInputKeyDown(EKeys::RightAlt);
-```
+### Raw Input Refactoring Plan
+The following methods currently use `IsInputKeyDown` or `WasInputKeyJustPressed` and need to be refactored to use pure Enhanced Input events:
 
-This should be refactored to use Enhanced Input entirely:
-- `IA_SelectAdd` (Shift+LMB) should fire independently as a chorded action
-- `IA_SelectToggle` (Ctrl+LMB) should fire independently as a chorded action
-- `IA_SelectRemove` (Alt+LMB) should fire independently as a chorded action
-- `IA_Select` (plain LMB) should only fire when no modifiers are held
+1.  **Selection Modifiers** (`OnSelectStarted`):
+    *   Current: Checks `IsInputKeyDown(EKeys::LeftShift)`, etc.
+    *   Target: Use `IA_SelectAdd`, `IA_SelectToggle`, `IA_SelectRemove` actions directly.
+
+2.  **Select All / Deselect All** (`Tick`):
+    *   Current: Checks `IsInputKeyDown(EKeys::LeftControl) && WasInputKeyJustPressed(EKeys::A)`.
+    *   Target: Fix `IA_SelectAll` and `IA_DeselectAll` chorded actions in IMC.
+
+3.  **Debug Logging** (`Tick`):
+    *   Current: Checks `IsInputKeyDown` for debug combos.
+    *   Target: Low priority, can remain or move to debug actions.
 
 ---
 
@@ -644,24 +645,24 @@ In the Blueprint derived from `AArchVisPlayerController`:
 > - 3D selection uses line trace but may have issues with hit detection
 
 - [x] `IA_Select` → `OnSelectStarted/OnSelectCompleted` (basic click selection works)
-- [ ] `IA_SelectAdd` → `OnSelectAdd` (Shift+Click - **BROKEN**: using raw input instead of Enhanced Input)
-- [ ] `IA_SelectToggle` → `OnSelectToggle` (Ctrl+Click - **BROKEN**: using raw input instead of Enhanced Input)
-- [ ] `IA_SelectRemove` → `OnSelectRemove` (Alt+Click - **BROKEN**: using raw input instead of Enhanced Input)
-- [ ] `IA_SelectAll` → `OnSelectAll` (**BROKEN**: handler exists but not working)
-- [ ] `IA_DeselectAll` → `OnDeselectAll` (**BROKEN**: handler exists but not working)
+- [x] `IA_SelectAdd` → `OnSelectAdd` (Shift+Click - **FIXED**: using Enhanced Input)
+- [x] `IA_SelectToggle` → `OnSelectToggle` (Ctrl+Click - **FIXED**: using Enhanced Input)
+- [x] `IA_SelectRemove` → `OnSelectRemove` (Alt+Click - **FIXED**: using Enhanced Input)
+- [x] `IA_SelectAll` → `OnSelectAll` (**FIXED**: using Enhanced Input)
+- [x] `IA_DeselectAll` → `OnDeselectAll` (**FIXED**: using Enhanced Input)
 - [ ] `IA_CycleSelection` → `OnCycleSelection` (cycle through overlapping objects)
 - [ ] `IA_BoxSelectStart` → `OnBoxSelectStart` (**BROKEN**: marquee not working in 2D mode)
 - [ ] `IA_BoxSelectDrag` → `OnBoxSelectDrag` (**BROKEN**: marquee not working in 2D mode)
 - [ ] `IA_BoxSelectEnd` → `OnBoxSelectEnd` (**BROKEN**: marquee not working in 2D mode)
 
 #### Selection TODO:
-- [ ] Refactor `OnSelectStarted` to NOT use `IsInputKeyDown()` - use Enhanced Input entirely
-- [ ] Make `IA_SelectAdd` (Shift+LMB) work as a proper chorded action
-- [ ] Make `IA_SelectToggle` (Ctrl+LMB) work as a proper chorded action
-- [ ] Make `IA_SelectRemove` (Alt+LMB) work as a proper chorded action
+- [x] Refactor `OnSelectStarted` to NOT use `IsInputKeyDown()` - use Enhanced Input entirely
+- [x] Make `IA_SelectAdd` (Shift+LMB) work as a proper chorded action
+- [x] Make `IA_SelectToggle` (Ctrl+LMB) work as a proper chorded action
+- [x] Make `IA_SelectRemove` (Alt+LMB) work as a proper chorded action
 - [ ] Fix marquee selection in 2D mode - investigate why world positions aren't updating
-- [ ] Fix SelectAll - ensure it calls `SelectTool->SelectAll()` properly
-- [ ] Fix DeselectAll - ensure it calls `SelectTool->ClearSelection()` properly
+- [x] Fix SelectAll - ensure it calls `SelectTool->SelectAll()` properly
+- [x] Fix DeselectAll - ensure it calls `SelectTool->ClearSelection()` properly
 - [x] Fix FocusSelection in 2D mode - camera should center on selection bounds
 - [x] Fix FocusSelection in 3D mode - camera should orbit to frame selection
 
