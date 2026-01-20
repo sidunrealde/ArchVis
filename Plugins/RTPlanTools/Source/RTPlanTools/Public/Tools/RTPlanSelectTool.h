@@ -154,9 +154,11 @@ private:
 	void PerformMarqueeSelection(bool bAddToSelection, bool bRemoveFromSelection);
 
 	// Helper: Get world position from pointer event
-	bool GetWorldPosition(const FRTPointerEvent& Event, FVector2D& OutWorldPos) const;
+	// Returns true if a valid position was found.
+	// OutWorldPos3D contains the full 3D hit location (for crosshair).
+	// OutWorldPos2D contains the 2D plan coordinates (for selection logic).
+	bool GetWorldPosition(const FRTPointerEvent& Event, FVector& OutWorldPos3D, FVector2D& OutWorldPos2D) const;
 	
 	// Helper: Perform 3D line trace for selection
 	bool PerformLineTrace(const FRTPointerEvent& Event, FVector& OutHitLocation) const;
 };
-

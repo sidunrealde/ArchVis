@@ -14,7 +14,6 @@ Legend: [x] done, [-] partial, [ ] pending
 | Marquee selection broken | 🔴 Open | Box/marquee selection not working in 2D mode - world positions not updating correctly |
 | SelectAll not working | 🔴 Open | `IA_SelectAll` handler exists but doesn't trigger `SelectTool->SelectAll()` |
 | DeselectAll not working | 🔴 Open | `IA_DeselectAll` handler exists but doesn't trigger `SelectTool->ClearSelection()` |
-| FocusSelection broken | 🔴 Open | `IA_FocusSelection` not working properly in both 2D and 3D mode |
 | 3D selection issues | ⚠️ Partial | Line trace may fail in some cases, cursor can snap to horizon |
 
 ### Selection System Refactor Needed
@@ -621,7 +620,7 @@ In the Blueprint derived from `AArchVisPlayerController`:
 - [x] `IA_Zoom` → `OnZoom` (adjust ortho width)
 - [x] `IA_PointerPosition` → `OnPointerPosition` (update virtual cursor position)
 - [x] `IA_ResetView` → `OnResetView` (reset camera to default)
-- [ ] `IA_FocusSelection` → `OnFocusSelection` (**BROKEN**: not working properly in 2D and 3D mode)
+- [x] `IA_FocusSelection` → `OnFocusSelection` (working in 2D and 3D mode)
 - [ ] `IA_SnapToggle` → `OnSnapToggle` (toggle snap on/off)
 - [ ] `IA_GridToggle` → `OnGridToggle` (toggle grid visibility)
 
@@ -642,7 +641,6 @@ In the Blueprint derived from `AArchVisPlayerController`:
 > - Need to refactor to use `IA_SelectAdd`, `IA_SelectToggle`, `IA_SelectRemove` as proper chorded actions
 > - Marquee selection (box select) is not working in 2D mode
 > - SelectAll and DeselectAll handlers exist but are not working
-> - FocusSelection is not working properly in both 2D and 3D mode
 > - 3D selection uses line trace but may have issues with hit detection
 
 - [x] `IA_Select` → `OnSelectStarted/OnSelectCompleted` (basic click selection works)
@@ -664,8 +662,8 @@ In the Blueprint derived from `AArchVisPlayerController`:
 - [ ] Fix marquee selection in 2D mode - investigate why world positions aren't updating
 - [ ] Fix SelectAll - ensure it calls `SelectTool->SelectAll()` properly
 - [ ] Fix DeselectAll - ensure it calls `SelectTool->ClearSelection()` properly
-- [ ] Fix FocusSelection in 2D mode - camera should center on selection bounds
-- [ ] Fix FocusSelection in 3D mode - camera should orbit to frame selection
+- [x] Fix FocusSelection in 2D mode - camera should center on selection bounds
+- [x] Fix FocusSelection in 3D mode - camera should orbit to frame selection
 
 ### 6.5 Drawing Actions - Wire to LineTool/PolylineTool
 - [x] `IA_DrawPlacePoint` → `OnDrawPlacePoint` (route LMB to active drawing tool)

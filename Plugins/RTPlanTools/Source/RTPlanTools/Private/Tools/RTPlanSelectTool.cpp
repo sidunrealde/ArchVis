@@ -192,7 +192,7 @@ FBox URTPlanSelectTool::GetSelectionBounds() const
 	return Bounds;
 }
 
-bool URTPlanSelectTool::GetWorldPosition(const FRTPointerEvent& Event, FVector2D& OutWorldPos) const
+bool URTPlanSelectTool::GetWorldPosition(const FRTPointerEvent& Event, FVector& OutWorldPos3D, FVector2D& OutWorldPos2D) const
 {
 	// For 2D mode (top-down ortho), the WorldDirection will be (0,0,-1)
 	// For 3D mode (perspective), we need to handle rays that might not intersect Z=0
@@ -213,7 +213,8 @@ bool URTPlanSelectTool::GetWorldPosition(const FRTPointerEvent& Event, FVector2D
 		FVector HitLocation;
 		if (PerformLineTrace(Event, HitLocation))
 		{
-			OutWorldPos = FVector2D(HitLocation.X, HitLocation.Y);
+			OutWorldPos3D = HitLocation;
+			OutWorldPos2D = FVector2D(HitLocation.X, HitLocation.Y);
 			return true;
 		}
 		
@@ -232,7 +233,8 @@ bool URTPlanSelectTool::GetWorldPosition(const FRTPointerEvent& Event, FVector2D
 		if (T > 0)
 		{
 			FVector Intersection = Event.WorldOrigin + Event.WorldDirection * T;
-			OutWorldPos = FVector2D(Intersection.X, Intersection.Y);
+			OutWorldPos3D = Intersection;
+			OutWorldPos2D = FVector2D(Intersection.X, Intersection.Y);
 			
 			if (bDebugEnabled && GWorld)
 			{
@@ -250,7 +252,8 @@ bool URTPlanSelectTool::GetWorldPosition(const FRTPointerEvent& Event, FVector2D
 		if (T > 0)
 		{
 			FVector Intersection = Event.WorldOrigin + Event.WorldDirection * T;
-			OutWorldPos = FVector2D(Intersection.X, Intersection.Y);
+			OutWorldPos3D = Intersection;
+			OutWorldPos2D = FVector2D(Intersection.X, Intersection.Y);
 			
 			if (bDebugEnabled && GWorld)
 			{
@@ -260,15 +263,16 @@ bool URTPlanSelectTool::GetWorldPosition(const FRTPointerEvent& Event, FVector2D
 		}
 	}
 	
-	// Last resort: forward projection (looking horizontally)
+	// Last resort: forward projection (looking horizontally or up at sky)
 	const float DefaultProjectDistance = 1000.0f;
 	FVector ProjectedPoint = Event.WorldOrigin + Event.WorldDirection * DefaultProjectDistance;
-	OutWorldPos = FVector2D(ProjectedPoint.X, ProjectedPoint.Y);
+	OutWorldPos3D = ProjectedPoint;
+	OutWorldPos2D = FVector2D(ProjectedPoint.X, ProjectedPoint.Y);
 	
 	if (bDebugEnabled && GWorld)
 	{
 		DrawDebugSphere(GWorld, ProjectedPoint, 20.0f, 8, FColor::Red, false, 0.1f);
-		UE_LOG(LogRTPlanSelectTool, Log, TEXT("  -> Forward projection at (%0.1f, %0.1f)"), OutWorldPos.X, OutWorldPos.Y);
+		UE_LOG(LogRTPlanSelectTool, Log, TEXT("  -> Forward projection at (%0.1f, %0.1f)"), OutWorldPos2D.X, OutWorldPos2D.Y);
 	}
 	return true;
 }
@@ -353,8 +357,9 @@ void URTPlanSelectTool::OnPointerEvent(const FRTPointerEvent& Event)
 			ActionStr, Event.bShiftDown, Event.bAltDown, Event.bCtrlDown);
 	}
 
-	FVector2D WorldPos;
-	bool bHasWorldPos = GetWorldPosition(Event, WorldPos);
+	FVector WorldPos3D;
+	FVector2D WorldPos2D;
+	bool bHasWorldPos = GetWorldPosition(Event, WorldPos3D, WorldPos2D);
 
 	switch (State)
 	{
@@ -377,8 +382,8 @@ void URTPlanSelectTool::OnPointerEvent(const FRTPointerEvent& Event)
 			}
 			if (bHasWorldPos)
 			{
-				MarqueeStartWorld = WorldPos;
-				MarqueeEndWorld = WorldPos;
+				MarqueeStartWorld = WorldPos2D;
+				MarqueeEndWorld = WorldPos2D;
 			}
 		}
 		else if (Event.Action == ERTPointerAction::Move)
@@ -386,7 +391,8 @@ void URTPlanSelectTool::OnPointerEvent(const FRTPointerEvent& Event)
 			if (bHasWorldPos)
 			{
 				// Update snapped cursor position for crosshair
-				LastSnappedWorldPos = FVector(WorldPos.X, WorldPos.Y, 0.0f);
+				// Use the full 3D position so crosshair tracks correctly in 3D (even when looking at sky)
+				LastSnappedWorldPos = WorldPos3D;
 			}
 			else
 			{
@@ -416,8 +422,8 @@ void URTPlanSelectTool::OnPointerEvent(const FRTPointerEvent& Event)
 			
 			if (bHasWorldPos)
 			{
-				MarqueeEndWorld = WorldPos;
-				LastSnappedWorldPos = FVector(WorldPos.X, WorldPos.Y, 0.0f);
+				MarqueeEndWorld = WorldPos2D;
+				LastSnappedWorldPos = WorldPos3D;
 			}
 			else
 			{
@@ -429,7 +435,7 @@ void URTPlanSelectTool::OnPointerEvent(const FRTPointerEvent& Event)
 			// This was a click, not a drag
 			if (bHasWorldPos)
 			{
-				PerformClickSelection(WorldPos, bShiftOnMouseDown, bAltOnMouseDown);
+				PerformClickSelection(WorldPos2D, bShiftOnMouseDown, bAltOnMouseDown);
 			}
 			State = EState::Idle;
 		}
@@ -440,8 +446,8 @@ void URTPlanSelectTool::OnPointerEvent(const FRTPointerEvent& Event)
 		{
 			if (bHasWorldPos)
 			{
-				MarqueeEndWorld = WorldPos;
-				LastSnappedWorldPos = FVector(WorldPos.X, WorldPos.Y, 0.0f);
+				MarqueeEndWorld = WorldPos2D;
+				LastSnappedWorldPos = WorldPos3D;
 			}
 			else
 			{
