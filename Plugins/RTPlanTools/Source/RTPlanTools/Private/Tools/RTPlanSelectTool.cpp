@@ -153,6 +153,42 @@ FBox URTPlanSelectTool::GetSelectionBounds() const
 		}
 	}
 
+	// Accumulate opening bounds
+	for (const FGuid& OpeningId : SelectedOpeningIds)
+	{
+		const FRTOpening* Opening = Data.Openings.Find(OpeningId);
+		if (Opening)
+		{
+			const FRTWall* Wall = Data.Walls.Find(Opening->WallId);
+			if (Wall)
+			{
+				const FRTVertex* VertA = Data.Vertices.Find(Wall->VertexAId);
+				const FRTVertex* VertB = Data.Vertices.Find(Wall->VertexBId);
+				if (VertA && VertB)
+				{
+					// Calculate opening position along wall
+					FVector2D WallDir = (VertB->Position - VertA->Position);
+					FVector2D DirNormalized = WallDir.GetSafeNormal();
+					FVector2D OpeningCenter = VertA->Position + DirNormalized * Opening->OffsetCm;
+					
+					// Calculate opening width extent
+					float HalfWidth = Opening->WidthCm * 0.5f;
+					FVector2D P1 = OpeningCenter - DirNormalized * HalfWidth;
+					FVector2D P2 = OpeningCenter + DirNormalized * HalfWidth;
+					
+					// Add bounds (approximate as rectangular prism aligned with wall)
+					float ZBottom = Opening->SillHeightCm;
+					float ZTop = Opening->SillHeightCm + Opening->HeightCm;
+					
+					Bounds += FVector(P1.X, P1.Y, ZBottom);
+					Bounds += FVector(P2.X, P2.Y, ZTop);
+					Bounds += FVector(P1.X, P1.Y, ZTop);
+					Bounds += FVector(P2.X, P2.Y, ZBottom);
+				}
+			}
+		}
+	}
+
 	return Bounds;
 }
 

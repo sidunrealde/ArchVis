@@ -1283,42 +1283,52 @@ void AArchVisPlayerController::OnFocusSelection(const FInputActionValue& Value)
 	
 	UE_LOG(LogArchVisPC, Log, TEXT("  Selection center: (%0.1f, %0.1f, %0.1f)"), 
 		SelectionCenter.X, SelectionCenter.Y, SelectionCenter.Z);
-	UE_LOG(LogArchVisPC, Log, TEXT("  Selection bounds: Min(%0.1f, %0.1f, %0.1f) Max(%0.1f, %0.1f, %0.1f)"),
-		SelectionBounds.Min.X, SelectionBounds.Min.Y, SelectionBounds.Min.Z,
-		SelectionBounds.Max.X, SelectionBounds.Max.Y, SelectionBounds.Max.Z);
 	
-	// Get the current pawn and move it to focus on selection
-	if (APawn* CurrentPawn = GetPawn())
+	// Calculate radius of the bounding sphere
+	float Radius = SelectionBounds.GetExtent().Size();
+	// Ensure minimum radius to avoid getting too close to single points
+	Radius = FMath::Max(Radius, 100.0f);
+
+	AArchVisPawnBase* ArchVisPawn = Cast<AArchVisPawnBase>(GetPawn());
+	if (!ArchVisPawn)
 	{
-		// Calculate appropriate distance based on bounds size
-		float BoundsRadius = SelectionBounds.GetExtent().Size();
-		float FocusDistance = FMath::Max(BoundsRadius * 2.0f, 500.0f);
-		
-		if (CurrentInteractionMode == EArchVisInteractionMode::Drafting2D)
-		{
-			// For 2D mode, just move the camera above the selection center
-			FVector NewLocation = FVector(SelectionCenter.X, SelectionCenter.Y, CurrentPawn->GetActorLocation().Z);
-			CurrentPawn->SetActorLocation(NewLocation);
-			UE_LOG(LogArchVisPC, Log, TEXT("  2D focus: Moved to (%0.1f, %0.1f)"), NewLocation.X, NewLocation.Y);
-		}
-		else
-		{
-			// For 3D mode, position camera looking at the selection center
-			FVector CameraOffset = FVector(-FocusDistance, 0, FocusDistance * 0.5f);
-			FVector NewLocation = SelectionCenter + CameraOffset;
-			
-			// Calculate rotation to look at selection center
-			FVector LookDirection = (SelectionCenter - NewLocation).GetSafeNormal();
-			FRotator NewRotation = LookDirection.Rotation();
-			
-			CurrentPawn->SetActorLocation(NewLocation);
-			CurrentPawn->SetActorRotation(NewRotation);
-			
-			UE_LOG(LogArchVisPC, Log, TEXT("  3D focus: Moved to (%0.1f, %0.1f, %0.1f), looking at center"),
-				NewLocation.X, NewLocation.Y, NewLocation.Z);
-		}
+		return;
 	}
-}// ============================================
+
+	if (CurrentInteractionMode == EArchVisInteractionMode::Drafting2D)
+	{
+		// For 2D, we want to center on the selection and zoom to fit.
+		// SetCameraTransform expects TargetArmLength as ZoomLevel for DraftingPawn.
+		// We use a heuristic for zoom level to ensure the object fits with some margin.
+		float TargetZoom = Radius * 2.5f; 
+		
+		FVector NewLocation = FVector(SelectionCenter.X, SelectionCenter.Y, 0.0f);
+		
+		// Use the pawn's interface to set transform, which handles internal state (TargetLocation, etc.)
+		ArchVisPawn->SetCameraTransform(NewLocation, FRotator(-90.0f, 0.0f, 0.0f), TargetZoom);
+		
+		UE_LOG(LogArchVisPC, Log, TEXT("  2D focus: Moved to (%0.1f, %0.1f), Zoom=%.1f"), 
+			NewLocation.X, NewLocation.Y, TargetZoom);
+	}
+	else
+	{
+		// For 3D, maintain current rotation but move camera to look at center from appropriate distance
+		FRotator CurrentRotation = ArchVisPawn->GetCameraRotation();
+		
+		// Calculate distance to fit object in ~60 deg FOV
+		float TargetDistance = Radius * 2.5f; 
+		
+		FVector NewLocation = SelectionCenter - (CurrentRotation.Vector() * TargetDistance);
+		
+		// Use the pawn's interface to set transform, which handles internal state (OrbitFocusPoint, etc.)
+		ArchVisPawn->SetCameraTransform(NewLocation, CurrentRotation, TargetDistance);
+		
+		UE_LOG(LogArchVisPC, Log, TEXT("  3D focus: Moved to (%0.1f, %0.1f, %0.1f), Dist=%.1f"),
+			NewLocation.X, NewLocation.Y, NewLocation.Z, TargetDistance);
+	}
+}
+
+// ============================================
 // TOOL HOTKEY HANDLERS
 // ============================================
 
@@ -1825,5 +1835,3 @@ void AArchVisPlayerController::ArchVisToggleSelectionDebug()
 {
 	SetSelectionDebugEnabled(!bSelectionDebugEnabled);
 }
-
-
