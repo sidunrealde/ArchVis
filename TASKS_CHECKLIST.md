@@ -626,8 +626,8 @@ In the Blueprint derived from `AArchVisPlayerController`:
 - [x] `IA_PointerPosition` → `OnPointerPosition` (update virtual cursor position)
 - [x] `IA_ResetView` → `OnResetView` (reset camera to default)
 - [x] `IA_FocusSelection` → `OnFocusSelection` (working in 2D and 3D mode)
-- [ ] `IA_SnapToggle` → `OnSnapToggle` (toggle snap on/off)
-- [ ] `IA_GridToggle` → `OnGridToggle` (toggle grid visibility)
+- [x] `IA_SnapToggle` → `OnSnapToggle` (toggle snap on/off)
+- [x] `IA_GridToggle` → `OnGridToggle` (toggle grid visibility)
 
 ### 6.3 View/Navigation Actions - 3D Mode
 - [x] `IA_Orbit` → `OnOrbitStarted/OnOrbitCompleted` (set `bOrbiting` state)

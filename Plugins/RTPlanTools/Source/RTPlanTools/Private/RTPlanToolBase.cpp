@@ -1,4 +1,5 @@
 ﻿#include "RTPlanToolBase.h"
+#include "RTPlanToolManager.h"
 
 void URTPlanToolBase::Init(URTPlanDocument* InDoc, FRTPlanSpatialIndex* InSpatialIndex)
 {
@@ -48,7 +49,11 @@ FVector2D URTPlanToolBase::GetSnappedPoint(const FVector& WorldPoint, float Snap
 {
 	FVector2D CursorPos(WorldPoint.X, WorldPoint.Y);
 
-	if (SpatialIndex)
+	URTPlanToolManager* ToolManager = Cast<URTPlanToolManager>(GetOuter());
+	bool bSnapEnabled = ToolManager ? ToolManager->IsSnapEnabled() : true;
+	bool bGridEnabled = ToolManager ? ToolManager->IsGridEnabled() : true;
+
+	if (bSnapEnabled && SpatialIndex)
 	{
 		FRTSnapResult Snap = SpatialIndex->QuerySnap(CursorPos, SnapRadius);
 		if (Snap.bValid)
@@ -57,11 +62,16 @@ FVector2D URTPlanToolBase::GetSnappedPoint(const FVector& WorldPoint, float Snap
 		}
 	}
 
-	// Fallback: Grid Snap (e.g. 10cm)
-	// TODO: Make grid size configurable
-	float GridSize = 10.0f;
-	return FVector2D(
-		FMath::RoundToFloat(CursorPos.X / GridSize) * GridSize,
-		FMath::RoundToFloat(CursorPos.Y / GridSize) * GridSize
-	);
+	if (bGridEnabled)
+	{
+		// Fallback: Grid Snap (e.g. 10cm)
+		// TODO: Make grid size configurable
+		float GridSize = 10.0f;
+		return FVector2D(
+			FMath::RoundToFloat(CursorPos.X / GridSize) * GridSize,
+			FMath::RoundToFloat(CursorPos.Y / GridSize) * GridSize
+		);
+	}
+
+	return CursorPos;
 }

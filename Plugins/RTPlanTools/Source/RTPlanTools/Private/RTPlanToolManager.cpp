@@ -177,3 +177,23 @@ void URTPlanToolManager::UpdateSpatialIndex()
 		SpatialIndex.Build(Document);
 	}
 }
+
+void URTPlanToolManager::ToggleSnap()
+{
+	bSnapEnabled = !bSnapEnabled;
+}
+
+void URTPlanToolManager::SetSnapEnabled(bool bEnabled)
+{
+	bSnapEnabled = bEnabled;
+}
+
+void URTPlanToolManager::ToggleGrid()
+{
+	bGridEnabled = !bGridEnabled;
+}
+
+void URTPlanToolManager::SetGridEnabled(bool bEnabled)
+{
+	bGridEnabled = bEnabled;
+}

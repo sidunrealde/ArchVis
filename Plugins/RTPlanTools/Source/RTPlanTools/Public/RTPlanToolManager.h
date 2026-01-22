@@ -70,6 +70,30 @@ public:
 	UFUNCTION()
 	void UpdateSpatialIndex();
 
+	// Toggle snapping
+	UFUNCTION(BlueprintCallable, Category = "RTPlan|Tools")
+	void ToggleSnap();
+
+	// Set snapping enabled
+	UFUNCTION(BlueprintCallable, Category = "RTPlan|Tools")
+	void SetSnapEnabled(bool bEnabled);
+
+	// Is snapping enabled?
+	UFUNCTION(BlueprintCallable, Category = "RTPlan|Tools")
+	bool IsSnapEnabled() const { return bSnapEnabled; }
+
+	// Toggle grid
+	UFUNCTION(BlueprintCallable, Category = "RTPlan|Tools")
+	void ToggleGrid();
+
+	// Set grid enabled
+	UFUNCTION(BlueprintCallable, Category = "RTPlan|Tools")
+	void SetGridEnabled(bool bEnabled);
+
+	// Is grid enabled?
+	UFUNCTION(BlueprintCallable, Category = "RTPlan|Tools")
+	bool IsGridEnabled() const { return bGridEnabled; }
+
 private:
 	UPROPERTY(Transient)
 	TObjectPtr<URTPlanDocument> Document;
@@ -86,4 +110,10 @@ private:
 
 	// The spatial index is owned here
 	FRTPlanSpatialIndex SpatialIndex;
+
+	// Snapping state
+	bool bSnapEnabled = true;
+
+	// Grid state
+	bool bGridEnabled = false;
 };

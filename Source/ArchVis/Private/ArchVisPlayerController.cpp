@@ -380,6 +380,17 @@ void AArchVisPlayerController::SetupInputComponent()
 			EIC->BindAction(InputConfig->IA_NumericDivide, ETriggerEvent::Started, this, &AArchVisPlayerController::OnNumericDivide);
 		}
 
+		// ============================================
+		// VIEW/GRID ACTIONS
+		// ============================================
+		if (InputConfig->IA_SnapToggle)
+		{
+			EIC->BindAction(InputConfig->IA_SnapToggle, ETriggerEvent::Started, this, &AArchVisPlayerController::OnSnapToggle);
+		}
+		if (InputConfig->IA_GridToggle)
+		{
+			EIC->BindAction(InputConfig->IA_GridToggle, ETriggerEvent::Started, this, &AArchVisPlayerController::OnGridToggle);
+		}
 
 		// ============================================
 		// TOOL INPUT COMPONENT INITIALIZATION
@@ -740,12 +751,28 @@ void AArchVisPlayerController::OnSnapToggle(const FInputActionValue& Value)
 {
 	bSnapToggledOn = !bSnapToggledOn;
 	UE_LOG(LogArchVisPC, Log, TEXT("Snap toggled: %s"), bSnapToggledOn ? TEXT("ON") : TEXT("OFF"));
+	
+	if (AArchVisGameMode* GM = Cast<AArchVisGameMode>(UGameplayStatics::GetGameMode(this)))
+	{
+		if (URTPlanToolManager* ToolMgr = GM->GetToolManager())
+		{
+			ToolMgr->SetSnapEnabled(bSnapToggledOn);
+		}
+	}
 }
 
 void AArchVisPlayerController::OnGridToggle(const FInputActionValue& Value)
 {
 	bGridVisible = !bGridVisible;
 	UE_LOG(LogArchVisPC, Log, TEXT("Grid toggled: %s"), bGridVisible ? TEXT("ON") : TEXT("OFF"));
+	
+	if (AArchVisGameMode* GM = Cast<AArchVisGameMode>(UGameplayStatics::GetGameMode(this)))
+	{
+		if (URTPlanToolManager* ToolMgr = GM->GetToolManager())
+		{
+			ToolMgr->SetGridEnabled(bGridVisible);
+		}
+	}
 }
 
 void AArchVisPlayerController::OnToggleView(const FInputActionValue& Value)

@@ -31,6 +31,22 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "RTPlan|UI")
 	ERTPlanToolType GetActiveToolType() const;
 
+	// Toggle snapping
+	UFUNCTION(BlueprintCallable, Category = "RTPlan|UI")
+	void ToggleSnap();
+
+	// Toggle grid
+	UFUNCTION(BlueprintCallable, Category = "RTPlan|UI")
+	void ToggleGrid();
+
+	// Is snapping enabled?
+	UFUNCTION(BlueprintCallable, Category = "RTPlan|UI")
+	bool IsSnapEnabled() const;
+
+	// Is grid enabled?
+	UFUNCTION(BlueprintCallable, Category = "RTPlan|UI")
+	bool IsGridEnabled() const;
+
 protected:
 	UPROPERTY(BlueprintReadOnly, Category = "RTPlan|UI")
 	TObjectPtr<URTPlanToolManager> ToolManager;

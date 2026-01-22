@@ -31,3 +31,36 @@ ERTPlanToolType URTPlanToolbar::GetActiveToolType() const
 	return ERTPlanToolType::None;
 }
 
+void URTPlanToolbar::ToggleSnap()
+{
+	if (ToolManager)
+	{
+		ToolManager->ToggleSnap();
+	}
+}
+
+void URTPlanToolbar::ToggleGrid()
+{
+	if (ToolManager)
+	{
+		ToolManager->ToggleGrid();
+	}
+}
+
+bool URTPlanToolbar::IsSnapEnabled() const
+{
+	if (ToolManager)
+	{
+		return ToolManager->IsSnapEnabled();
+	}
+	return false;
+}
+
+bool URTPlanToolbar::IsGridEnabled() const
+{
+	if (ToolManager)
+	{
+		return ToolManager->IsGridEnabled();
+	}
+	return false;
+}
