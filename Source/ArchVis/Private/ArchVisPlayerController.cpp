@@ -166,20 +166,25 @@ void AArchVisPlayerController::SetupInputComponent()
 		// GLOBAL ACTIONS (IMC_Global)
 		// ============================================
 		
-		// Modifiers
+		// Modifiers - use Started/Triggered for initial state, Completed for release
+		// NOTE: For chorded actions to work, the IMC binding for IA_ModifierCtrl/Shift/Alt
+		// must use a "Down" trigger so they continuously emit Triggered events while held.
 		if (InputConfig->IA_ModifierCtrl)
 		{
 			EIC->BindAction(InputConfig->IA_ModifierCtrl, ETriggerEvent::Started, this, &AArchVisPlayerController::OnModifierCtrlStarted);
+			EIC->BindAction(InputConfig->IA_ModifierCtrl, ETriggerEvent::Triggered, this, &AArchVisPlayerController::OnModifierCtrlStarted);
 			EIC->BindAction(InputConfig->IA_ModifierCtrl, ETriggerEvent::Completed, this, &AArchVisPlayerController::OnModifierCtrlCompleted);
 		}
 		if (InputConfig->IA_ModifierShift)
 		{
 			EIC->BindAction(InputConfig->IA_ModifierShift, ETriggerEvent::Started, this, &AArchVisPlayerController::OnModifierShiftStarted);
+			EIC->BindAction(InputConfig->IA_ModifierShift, ETriggerEvent::Triggered, this, &AArchVisPlayerController::OnModifierShiftStarted);
 			EIC->BindAction(InputConfig->IA_ModifierShift, ETriggerEvent::Completed, this, &AArchVisPlayerController::OnModifierShiftCompleted);
 		}
 		if (InputConfig->IA_ModifierAlt)
 		{
 			EIC->BindAction(InputConfig->IA_ModifierAlt, ETriggerEvent::Started, this, &AArchVisPlayerController::OnModifierAltStarted);
+			EIC->BindAction(InputConfig->IA_ModifierAlt, ETriggerEvent::Triggered, this, &AArchVisPlayerController::OnModifierAltStarted);
 			EIC->BindAction(InputConfig->IA_ModifierAlt, ETriggerEvent::Completed, this, &AArchVisPlayerController::OnModifierAltCompleted);
 		}
 
@@ -476,9 +481,21 @@ void AArchVisPlayerController::UpdateInputMappingContexts()
 		ActiveModeBaseIMC = InputConfig->IMC_3D_Base;
 		AddMappingContext(ActiveModeBaseIMC, IMC_Priority_ModeBase);
 
-		// Add 3D Selection and Navigation (both Priority 2)
-		AddMappingContext(InputConfig->IMC_3D_Selection, IMC_Priority_Tool);
-		AddMappingContext(InputConfig->IMC_3D_Navigation, IMC_Priority_Tool);
+		// Add 3D Selection and Navigation (both Priority 3 to override tools for Orbit/Select)
+		AddMappingContext(InputConfig->IMC_3D_Selection, IMC_Priority_NumericEntry);
+		AddMappingContext(InputConfig->IMC_3D_Navigation, IMC_Priority_NumericEntry);
+		
+		// Add 2D tool contexts for 3D mode as well, but only if they are active
+		if (Current2DToolMode == EArchVis2DToolMode::LineTool)
+		{
+			AddMappingContext(InputConfig->IMC_2D_LineTool, IMC_Priority_Tool);
+			ActivateNumericEntryContext();
+		}
+		else if (Current2DToolMode == EArchVis2DToolMode::PolylineTool)
+		{
+			AddMappingContext(InputConfig->IMC_2D_PolylineTool, IMC_Priority_Tool);
+			ActivateNumericEntryContext();
+		}
 	}
 
 	UE_LOG(LogArchVisPC, Log, TEXT("Updated IMCs - Mode: %s, Tool: %s"),
@@ -489,13 +506,19 @@ void AArchVisPlayerController::UpdateInputMappingContexts()
 void AArchVisPlayerController::SwitchTo2DToolMode(EArchVis2DToolMode NewToolMode)
 {
 	if (!InputConfig) return;
-	if (CurrentInteractionMode != EArchVisInteractionMode::Drafting2D) return;
 
 	UE_LOG(LogArchVisPC, Log, TEXT("SwitchTo2DToolMode: %s"), *UEnum::GetValueAsString(NewToolMode));
 
 	// Remove current tool context
 	ClearAllToolContexts();
 	Current2DToolMode = NewToolMode;
+
+	// Restore 3D contexts if in 3D mode (because ClearAllToolContexts removed them)
+	if (CurrentInteractionMode == EArchVisInteractionMode::Navigation3D)
+	{
+		AddMappingContext(InputConfig->IMC_3D_Selection, IMC_Priority_NumericEntry);
+		AddMappingContext(InputConfig->IMC_3D_Navigation, IMC_Priority_NumericEntry);
+	}
 
 	switch (NewToolMode)
 	{
@@ -673,9 +696,21 @@ void AArchVisPlayerController::Tick(float DeltaTime)
 	}
 
 	// Don't send move events when numeric input is active
-	if (NumericInputBuffer.bIsActive && !NumericInputBuffer.Buffer.IsEmpty())
+	if (!NumericInputBuffer.Buffer.IsEmpty())
 	{
-		return;
+		// Check if mouse moved significantly
+		float Dist = FVector2D::Distance(VirtualCursorPos, NumericInputStartMousePos);
+		if (Dist > NumericInputMoveThreshold)
+		{
+			// Cancel numeric input
+			OnNumericCancel(FInputActionValue());
+			UE_LOG(LogArchVisPC, Log, TEXT("Numeric input cancelled by mouse movement (Dist: %.1f)"), Dist);
+			// Fall through to allow move event processing
+		}
+		else
+		{
+			return;
+		}
 	}
 
 	// Send move event to active tool
@@ -715,6 +750,13 @@ void AArchVisPlayerController::OnGridToggle(const FInputActionValue& Value)
 
 void AArchVisPlayerController::OnToggleView(const FInputActionValue& Value)
 {
+	// Only allow view toggling if we are in Selection mode (or no tool)
+	// This prevents accidental mode switching while drawing tools are active
+	if (Current2DToolMode == EArchVis2DToolMode::LineTool || Current2DToolMode == EArchVis2DToolMode::PolylineTool)
+	{
+		return;
+	}
+
 	// Toggle between 2D and 3D pawns
 	ToggleViewPawn();
 }
@@ -751,6 +793,12 @@ void AArchVisPlayerController::OnSelectStarted(const FInputActionValue& Value)
 	
 	bSelectActionActive = true;
 	
+	// If we are in 3D mode and orbit is active, we should not process selection
+	if (CurrentInteractionMode == EArchVisInteractionMode::Navigation3D && bOrbitActive)
+	{
+		return;
+	}
+	
 	AArchVisGameMode* GM = Cast<AArchVisGameMode>(UGameplayStatics::GetGameMode(this));
 	if (!GM) return;
 	
@@ -775,6 +823,12 @@ void AArchVisPlayerController::OnSelectCompleted(const FInputActionValue& Value)
 	}
 	
 	bSelectActionActive = false;
+	
+	// If we are in 3D mode and orbit is active, we should not process selection
+	if (CurrentInteractionMode == EArchVisInteractionMode::Navigation3D && bOrbitActive)
+	{
+		return;
+	}
 	
 	AArchVisGameMode* GM = Cast<AArchVisGameMode>(UGameplayStatics::GetGameMode(this));
 	if (!GM) return;
@@ -1018,6 +1072,27 @@ void AArchVisPlayerController::OnDrawCancel(const FInputActionValue& Value)
 			}
 		}
 	}
+
+	// If numeric input was active, cancelling the draw should also cancel numeric input.
+	if (bNumericEntryContextActive)
+	{
+		// Only deactivate context if we are NOT in a persistent drawing tool
+		bool bIsDrawingTool = (Current2DToolMode == EArchVis2DToolMode::LineTool || 
+							   Current2DToolMode == EArchVis2DToolMode::PolylineTool);
+		
+		if (!bIsDrawingTool)
+		{
+			DeactivateNumericEntryContext();
+			UE_LOG(LogArchVisPC, Log, TEXT("Numeric entry cancelled due to DrawCancel"));
+		}
+		else
+		{
+			// For drawing tools, just clear the buffer but keep context active
+			// so user can immediately type numbers for the next operation
+			NumericInputBuffer.ClearAll();
+			UE_LOG(LogArchVisPC, Log, TEXT("Numeric buffer cleared due to DrawCancel (Context remains active)"));
+		}
+	}
 }
 
 void AArchVisPlayerController::OnDrawClose(const FInputActionValue& Value)
@@ -1084,6 +1159,18 @@ void AArchVisPlayerController::OnNumericDigit(int32 Digit)
 		ActivateNumericEntryContext();
 	}
 	
+	// Capture mouse position if starting new input
+	if (NumericInputBuffer.Buffer.IsEmpty())
+	{
+		// Update VirtualCursorPos to ensure we have the latest position
+		float MouseX, MouseY;
+		if (GetMousePosition(MouseX, MouseY))
+		{
+			VirtualCursorPos = FVector2D(MouseX, MouseY);
+		}
+		NumericInputStartMousePos = VirtualCursorPos;
+	}
+	
 	NumericInputBuffer.AppendChar(TEXT('0') + Digit);
 	UE_LOG(LogArchVisPC, Log, TEXT("Numeric: %d, Buffer: %s"), Digit, *NumericInputBuffer.Buffer);
 	
@@ -1113,6 +1200,18 @@ void AArchVisPlayerController::OnNumericDecimal(const FInputActionValue& Value)
 	if (!bNumericEntryContextActive)
 	{
 		ActivateNumericEntryContext();
+	}
+	
+	// Capture mouse position if starting new input
+	if (NumericInputBuffer.Buffer.IsEmpty())
+	{
+		// Update VirtualCursorPos to ensure we have the latest position
+		float MouseX, MouseY;
+		if (GetMousePosition(MouseX, MouseY))
+		{
+			VirtualCursorPos = FVector2D(MouseX, MouseY);
+		}
+		NumericInputStartMousePos = VirtualCursorPos;
 	}
 	
 	NumericInputBuffer.AppendChar(TEXT('.'));
@@ -1187,14 +1286,31 @@ void AArchVisPlayerController::PerformBackspace()
 
 void AArchVisPlayerController::OnNumericCommit(const FInputActionValue& Value)
 {
-	CommitNumericInput();
-	DeactivateNumericEntryContext();
+	if (NumericInputBuffer.Buffer.IsEmpty())
+	{
+		// Buffer empty - user pressed Enter likely to confirm drawing
+		// Pass through to DrawConfirm
+		OnDrawConfirm(Value);
+	}
+	else
+	{
+		CommitNumericInput();
+		
+		// Only deactivate if NOT in a drawing tool that supports continuous input
+		bool bIsDrawingTool = (Current2DToolMode == EArchVis2DToolMode::LineTool || 
+							   Current2DToolMode == EArchVis2DToolMode::PolylineTool);
+		
+		if (!bIsDrawingTool)
+		{
+			DeactivateNumericEntryContext();
+		}
+	}
 }
 
 void AArchVisPlayerController::OnNumericCancel(const FInputActionValue& Value)
 {
+	bool bWasEmpty = NumericInputBuffer.Buffer.IsEmpty();
 	NumericInputBuffer.ClearAll();
-	DeactivateNumericEntryContext();
 	
 	// Also clear tool override
 	if (AArchVisGameMode* GM = Cast<AArchVisGameMode>(UGameplayStatics::GetGameMode(this)))
@@ -1206,6 +1322,13 @@ void AArchVisPlayerController::OnNumericCancel(const FInputActionValue& Value)
 				LineTool->ClearNumericInputOverride();
 			}
 		}
+	}
+
+	// If buffer was empty, we want to exit numeric mode (allow tool switching etc)
+	// If buffer was NOT empty, we just cleared the typo, keep context active for retrying
+	if (bWasEmpty)
+	{
+		DeactivateNumericEntryContext();
 	}
 }
 
@@ -1374,7 +1497,7 @@ void AArchVisPlayerController::OnFocusSelection(const FInputActionValue& Value)
 		// Use the pawn's interface to set transform, which handles internal state (TargetLocation, etc.)
 		ArchVisPawn->SetCameraTransform(NewLocation, FRotator(-90.0f, 0.0f, 0.0f), TargetZoom);
 		
-		UE_LOG(LogArchVisPC, Log, TEXT("  2D focus: Moved to (%0.1f, %0.1f), Zoom=%.1f"), 
+		UE_LOG(LogArchVisPC, Log, TEXT("  2D focus: Moved to (%0.1f, %0.1f), Zoom=%.1f"),
 			NewLocation.X, NewLocation.Y, TargetZoom);
 	}
 	else

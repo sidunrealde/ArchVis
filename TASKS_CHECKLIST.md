@@ -11,8 +11,8 @@ Legend: [x] done, [-] partial, [ ] pending
 | Issue | Status | Description |
 |-------|--------|-------------|
 | Selection uses raw input | 🟢 Fixed | `OnSelectStarted` now uses Enhanced Input actions (`IA_SelectAdd`, `IA_SelectToggle`, `IA_SelectRemove`) |
-| SelectAll uses raw input | 🟢 Fixed | `SelectAll` now uses `IA_SelectAll` Enhanced Input action |
-| DeselectAll uses raw input | 🟢 Fixed | `DeselectAll` now uses `IA_DeselectAll` Enhanced Input action |
+| SelectAll uses raw input | ?? Open | `SelectAll` now uses `IA_SelectAll` Enhanced Input action |
+| DeselectAll uses raw input | ?? Open | `DeselectAll` now uses `IA_DeselectAll` Enhanced Input action |
 | Marquee selection broken | 🔴 Open | Box/marquee selection not working in 2D mode - world positions not updating correctly |
 | 3D selection issues | ⚠️ Partial | Line trace may fail in some cases, cursor can snap to horizon |
 
@@ -354,17 +354,21 @@ Create each IMC as a new asset (Right-click → Input → Input Mapping Context)
 #### IMC_Global (Priority 0 - Always Active)
 This context is **always** active regardless of mode or tool.
 
-| Action | Key Binding | Modifiers |
-|--------|-------------|-----------|
-| `IA_ModifierCtrl` | Left Ctrl | - |
-| `IA_ModifierShift` | Left Shift | - |
-| `IA_ModifierAlt` | Left Alt | - |
+> ⚠️ **IMPORTANT**: Modifier actions (`IA_ModifierCtrl`, `IA_ModifierShift`, `IA_ModifierAlt`) MUST use a **"Down"** trigger type in the IMC. This keeps them in a `Triggered` state while held, which is required for Chorded Action triggers to work on other actions like `IA_SelectAll`, `IA_Undo`, etc.
+
+| Action | Key Binding | Trigger Type | Notes |
+|--------|-------------|--------------|-------|
+| `IA_ModifierCtrl` | Left Ctrl | **Down** | Required for chorded actions |
+| `IA_ModifierShift` | Left Shift | **Down** | Required for chorded actions |
+| `IA_ModifierAlt` | Left Alt | **Down** | Required for chorded actions |
 | `IA_Escape` | Escape | - |
 | `IA_ToggleView` | Tab | - |
 | `IA_Delete` | Delete | - |
 | `IA_Undo` | Z | Chorded Action: `IA_ModifierCtrl` |
 | `IA_Redo` | Y | Chorded Action: `IA_ModifierCtrl` |
 | `IA_Save` | S | Chorded Action: `IA_ModifierCtrl` |
+| `IA_SelectAll` | A | Chorded Action: `IA_ModifierCtrl` |
+| `IA_DeselectAll` | D | Chorded Action: `IA_ModifierCtrl` |
 | `IA_ToolSelect` | V | - |
 | `IA_ToolLine` | L | - |
 | `IA_ToolPolyline` | P | - |
@@ -433,9 +437,9 @@ Selection tool controls.
 | `IA_BoxSelectStart` | Left Mouse Button | Hold Time: 0.15s |
 | `IA_BoxSelectDrag` | Mouse XY 2D-Axis | - |
 | `IA_BoxSelectEnd` | Left Mouse Button (Released) | - |
-| `IA_SelectAll` | A | Chorded Action: `IA_ModifierCtrl` |
-| `IA_DeselectAll` | D | Chorded Action: `IA_ModifierCtrl` |
 | `IA_CycleSelection` | Spacebar | - |
+
+> ⚠️ **NOTE**: `IA_SelectAll` and `IA_DeselectAll` have been moved to `IMC_Global` so that the Chorded Action trigger works correctly (chord base and chorded action must be in same IMC).
 
 ---
 

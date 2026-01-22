@@ -338,6 +338,13 @@ protected:
 	ERTPlanToolType CurrentToolType = ERTPlanToolType::None;
 	bool bNumericEntryContextActive = false;
 
+	// Mouse position when numeric input started (buffer became non-empty)
+	FVector2D NumericInputStartMousePos;
+	
+	// Threshold in pixels for mouse movement to cancel numeric input
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Input")
+	float NumericInputMoveThreshold = 10.0f;
+
 	UPROPERTY(Transient)
 	TObjectPtr<UInputMappingContext> ActiveToolIMC;
 

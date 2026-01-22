@@ -283,6 +283,13 @@ FVector2D URTPlanLineTool::ApplyAngleSnap(const FVector2D& Start, const FVector2
 
 void URTPlanLineTool::OnPointerEvent(const FRTPointerEvent& Event)
 {
+	// Block drawing actions if navigation modifiers (Alt) or Control are active
+	// Shift is allowed as it is used for OrthoLock
+	if (Event.bAltDown || Event.bCtrlDown)
+	{
+		return;
+	}
+
 	FVector GroundPoint;
 	if (!GetGroundIntersection(Event, GroundPoint))
 	{
@@ -453,6 +460,9 @@ void URTPlanLineTool::OnNumericInputWithField(float Value, ERTNumericField Field
 	
 	// Commit the wall using helper
 	CommitWallSegment(bIsPolyline);
+	
+	// IMPORTANT: Clear numeric input active flag after commit so mouse can take over again
+	bNumericInputActive = false;
 }
 
 void URTPlanLineTool::CommitWallSegment(bool bContinuePolyline)
@@ -486,6 +496,8 @@ void URTPlanLineTool::CommitWallSegment(bool bContinuePolyline)
 	if (bContinuePolyline)
 	{
 		StartPoint = CurrentEndPoint;
+		// Reset numeric input state for the new segment
+		bNumericInputActive = false;
 	}
 	else
 	{
