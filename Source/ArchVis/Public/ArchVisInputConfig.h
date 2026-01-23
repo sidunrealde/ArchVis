@@ -16,8 +16,9 @@
  * │   ├── IMC_2D_Selection (Priority: 2)
  * │   ├── IMC_2D_LineTool (Priority: 2)
  * │   │   └── IMC_NumericEntry (Priority: 3 - Layered when typing)
- * │   └── IMC_2D_PolylineTool (Priority: 2)
- * │       └── IMC_NumericEntry (Priority: 3 - Layered when typing)
+ * │   ├── IMC_2D_PolylineTool (Priority: 2)
+ * │   │   └── IMC_NumericEntry (Priority: 3 - Layered when typing)
+ * │   └── IMC_2D_TrimTool (Priority: 2)
  * │
  * └── IMC_3D_Base (Priority: 1 - When in 3D mode)
  *     ├── IMC_3D_Selection (Priority: 2)
@@ -59,6 +60,11 @@ public:
 	// Contains: DrawPlacePoint, DrawConfirm, DrawCancel, DrawClose, DrawRemoveLastPoint
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Contexts|2D")
 	TObjectPtr<UInputMappingContext> IMC_2D_PolylineTool;
+
+	// 2D Trim tool context (Priority 2)
+	// Contains: Select, BoxSelect
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Contexts|2D")
+	TObjectPtr<UInputMappingContext> IMC_2D_TrimTool;
 
 	// Numeric Entry context - layered on top during numeric input (Priority 3)
 	// Contains: Digit keys, Decimal, Backspace, Arithmetic operators, Commit, Cancel
@@ -297,4 +303,7 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Tools")
 	TObjectPtr<UInputAction> IA_ToolPolyline;  // P key
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Tools")
+	TObjectPtr<UInputAction> IA_ToolTrim;  // T key
 };

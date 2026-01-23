@@ -111,6 +111,7 @@ All IMC assets have been created in `Content/Input/`:
 - `IMC_2DSelection` (Priority 2 - Select Tool)
 - `IMC_2DLineTool` (Priority 2 - Line Tool)
 - `IMC_2DPolylineTool` (Priority 2 - Polyline Tool)
+- `IMC_2DTrimTool` (Priority 2 - Trim Tool)
 - `IMC_3DBase` (Priority 1 - 3D Mode)
 - `IMC_3DSelection` (Priority 2 - 3D Selection)
 - `IMC_3DNavigation` (Priority 2 - 3D Nav Views)
@@ -125,7 +126,7 @@ All Input Actions have been created in `Content/Input/Actions/`:
 - `IA_ModifierCtrl`, `IA_ModifierShift`, `IA_ModifierAlt`
 - `IA_Undo`, `IA_Redo`, `IA_Delete`, `IA_Save`, `IA_Escape`
 - `IA_ToggleView`
-- `IA_ToolSelect`, `IA_ToolLine`, `IA_ToolPolyLine`
+- `IA_ToolSelect`, `IA_ToolLine`, `IA_ToolPolyLine`, `IA_ToolTrim`
 
 **View Actions (`ViewActions/`):**
 - `IA_Pan`, `IA_PanDelta`, `IA_Zoom`
@@ -179,6 +180,7 @@ This section tracks the implementation of C++ handlers for each Input Action.
 | `IA_ToolSelect` | `OnToolSelect` | ⏳ Pending | `ToolManager->SelectToolByType(Select)` |
 | `IA_ToolLine` | `OnToolLine` | ⏳ Pending | `ToolManager->SelectToolByType(Line)` |
 | `IA_ToolPolyLine` | `OnToolPolyline` | ⏳ Pending | `ToolManager->SelectToolByType(Polyline)` |
+| `IA_ToolTrim` | `OnToolTrim` | ⏳ Pending | `ToolManager->SelectToolByType(Trim)` |
 
 #### View/Navigation Actions - 2D Mode
 | Action | Handler | Status | Notes |

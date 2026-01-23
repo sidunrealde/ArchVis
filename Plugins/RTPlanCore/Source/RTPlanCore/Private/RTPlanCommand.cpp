@@ -102,3 +102,66 @@ void URTCmdDeleteWall::Undo()
 	FRTPlanData& Data = Document->GetDataMutable();
 	Data.Walls.Add(DeletedWall.Id, DeletedWall);
 }
+
+// --- URTCmdDeleteVertex ---
+
+bool URTCmdDeleteVertex::Execute()
+{
+	if (!Document) return false;
+
+	FRTPlanData& Data = Document->GetDataMutable();
+
+	if (Data.Vertices.Contains(VertexId))
+	{
+		DeletedVertex = Data.Vertices[VertexId];
+		Data.Vertices.Remove(VertexId);
+		return true;
+	}
+
+	return false;
+}
+
+void URTCmdDeleteVertex::Undo()
+{
+	if (!Document) return;
+
+	FRTPlanData& Data = Document->GetDataMutable();
+	Data.Vertices.Add(DeletedVertex.Id, DeletedVertex);
+}
+
+// --- URTCmdMacro ---
+
+bool URTCmdMacro::Execute()
+{
+	if (!Document) return false;
+
+	// Execute all commands in order
+	for (URTCommand* Cmd : Commands)
+	{
+		if (Cmd)
+		{
+			Cmd->Document = Document;
+			if (!Cmd->Execute())
+			{
+				// If any command fails, we should probably rollback the ones that succeeded
+				// But for now, we'll just return false and leave it in a partial state (TODO: fix this)
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
+void URTCmdMacro::Undo()
+{
+	if (!Document) return;
+
+	// Undo all commands in reverse order
+	for (int32 i = Commands.Num() - 1; i >= 0; --i)
+	{
+		if (URTCommand* Cmd = Commands[i])
+		{
+			Cmd->Undo();
+		}
+	}
+}

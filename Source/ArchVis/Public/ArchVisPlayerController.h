@@ -49,7 +49,8 @@ enum class EArchVis2DToolMode : uint8
 	None,
 	Selection,
 	LineTool,
-	PolylineTool
+	PolylineTool,
+	TrimTool
 };
 
 /**
@@ -263,6 +264,7 @@ protected:
 	void OnToolSelectHotkey(const FInputActionValue& Value);
 	void OnToolLineHotkey(const FInputActionValue& Value);
 	void OnToolPolylineHotkey(const FInputActionValue& Value);
+	void OnToolTrimHotkey(const FInputActionValue& Value);
 
 	// --- Console Commands ---
 	UFUNCTION(Exec)

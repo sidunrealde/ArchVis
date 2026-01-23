@@ -1,6 +1,7 @@
 ﻿#include "RTPlanToolManager.h"
 #include "Tools/RTPlanSelectTool.h"
 #include "Tools/RTPlanLineTool.h"
+#include "Tools/RTPlanTrimTool.h"
 #include "RTPlanCommand.h"
 
 void URTPlanToolManager::Initialize(URTPlanDocument* InDoc)
@@ -44,6 +45,10 @@ void URTPlanToolManager::SelectTool(TSubclassOf<URTPlanToolBase> ToolClass)
 		{
 			// Check if it's in polyline mode (we'd need to check after creation)
 			ActiveToolType = ERTPlanToolType::Line;
+		}
+		else if (ToolClass->IsChildOf(URTPlanTrimTool::StaticClass()))
+		{
+			ActiveToolType = ERTPlanToolType::Trim;
 		}
 	}
 }
@@ -93,6 +98,12 @@ void URTPlanToolManager::SelectToolByType(ERTPlanToolType ToolType)
 		{
 			LineTool->SetPolylineMode(true);
 		}
+		ActiveTool->OnEnter();
+		break;
+
+	case ERTPlanToolType::Trim:
+		ActiveTool = NewObject<URTPlanTrimTool>(this);
+		ActiveTool->Init(Document, &SpatialIndex);
 		ActiveTool->OnEnter();
 		break;
 		

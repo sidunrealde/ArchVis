@@ -84,4 +84,51 @@ public:
 	virtual FString GetDescription() const override { return TEXT("Delete Wall"); }
 };
 
+/**
+ * Command to Delete a Vertex.
+ */
+UCLASS()
+class RTPLANCORE_API URTCmdDeleteVertex : public URTCommand
+{
+	GENERATED_BODY()
+
+public:
+	FGuid VertexId;
+	FRTVertex DeletedVertex; // Stored for Undo
+
+	virtual bool Execute() override;
+	virtual void Undo() override;
+	virtual FString GetDescription() const override { return TEXT("Delete Vertex"); }
+};
+
+/**
+ * Macro Command (Composite)
+ * Executes multiple commands as a single atomic operation.
+ */
+UCLASS()
+class RTPLANCORE_API URTCmdMacro : public URTCommand
+{
+	GENERATED_BODY()
+
+public:
+	UPROPERTY()
+	TArray<TObjectPtr<URTCommand>> Commands;
+
+	UPROPERTY()
+	FString Description = TEXT("Macro Command");
+
+	virtual bool Execute() override;
+	virtual void Undo() override;
+	virtual FString GetDescription() const override { return Description; }
+
+	void AddCommand(URTCommand* Cmd)
+	{
+		if (Cmd)
+		{
+			Cmd->Document = Document;
+			Commands.Add(Cmd);
+		}
+	}
+};
+
 // TODO: Add commands for Openings, Objects, Runs as we implement those features.

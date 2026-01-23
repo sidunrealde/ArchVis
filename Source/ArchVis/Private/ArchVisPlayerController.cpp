@@ -231,6 +231,10 @@ void AArchVisPlayerController::SetupInputComponent()
 		{
 			EIC->BindAction(InputConfig->IA_ToolPolyline, ETriggerEvent::Started, this, &AArchVisPlayerController::OnToolPolylineHotkey);
 		}
+		if (InputConfig->IA_ToolTrim)
+		{
+			EIC->BindAction(InputConfig->IA_ToolTrim, ETriggerEvent::Started, this, &AArchVisPlayerController::OnToolTrimHotkey);
+		}
 
 		// NOTE: Navigation actions (Pan, Zoom, Orbit, Fly, etc.) are now handled by
 		// pawn-specific input components:
@@ -549,6 +553,10 @@ void AArchVisPlayerController::SwitchTo2DToolMode(EArchVis2DToolMode NewToolMode
 		ActiveToolIMC = InputConfig->IMC_2D_PolylineTool;
 		break;
 
+	case EArchVis2DToolMode::TrimTool:
+		ActiveToolIMC = InputConfig->IMC_2D_TrimTool;
+		break;
+
 	default:
 		ActiveToolIMC = nullptr;
 		break;
@@ -575,6 +583,7 @@ void AArchVisPlayerController::ClearAllToolContexts()
 	RemoveMappingContext(InputConfig->IMC_2D_Selection);
 	RemoveMappingContext(InputConfig->IMC_2D_LineTool);
 	RemoveMappingContext(InputConfig->IMC_2D_PolylineTool);
+	RemoveMappingContext(InputConfig->IMC_2D_TrimTool);
 	RemoveMappingContext(InputConfig->IMC_3D_Selection);
 	RemoveMappingContext(InputConfig->IMC_3D_Navigation);
 	
@@ -1587,6 +1596,20 @@ void AArchVisPlayerController::OnToolPolylineHotkey(const FInputActionValue& Val
 			ToolMgr->SelectToolByType(ERTPlanToolType::Polyline);
 			OnToolChanged(ERTPlanToolType::Polyline);
 			SwitchTo2DToolMode(EArchVis2DToolMode::PolylineTool);
+		}
+	}
+}
+
+void AArchVisPlayerController::OnToolTrimHotkey(const FInputActionValue& Value)
+{
+	UE_LOG(LogArchVisPC, Log, TEXT("OnToolTrimHotkey triggered"));
+	if (AArchVisGameMode* GM = Cast<AArchVisGameMode>(UGameplayStatics::GetGameMode(this)))
+	{
+		if (URTPlanToolManager* ToolMgr = GM->GetToolManager())
+		{
+			ToolMgr->SelectToolByType(ERTPlanToolType::Trim);
+			OnToolChanged(ERTPlanToolType::Trim);
+			SwitchTo2DToolMode(EArchVis2DToolMode::TrimTool);
 		}
 	}
 }

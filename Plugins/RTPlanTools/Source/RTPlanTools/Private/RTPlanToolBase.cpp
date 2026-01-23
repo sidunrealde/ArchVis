@@ -66,7 +66,7 @@ FVector2D URTPlanToolBase::GetSnappedPoint(const FVector& WorldPoint, float Snap
 	{
 		// Fallback: Grid Snap (e.g. 10cm)
 		// TODO: Make grid size configurable
-		float GridSize = 10.0f;
+		float GridSize = 100.0f;
 		return FVector2D(
 			FMath::RoundToFloat(CursorPos.X / GridSize) * GridSize,
 			FMath::RoundToFloat(CursorPos.Y / GridSize) * GridSize

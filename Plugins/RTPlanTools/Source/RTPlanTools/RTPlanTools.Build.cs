@@ -15,8 +15,9 @@ public class RTPlanTools : ModuleRules
 				"RTPlanCore",
 				"RTPlanInput",
 				"RTPlanSpatial",
-				"RTPlanCatalog", // Added dependency
-				"RTPlanObjects"  // Added dependency
+				"RTPlanMath", // Added dependency for geometry utils
+				"RTPlanCatalog",
+				"RTPlanObjects"
 			}
 		);
 

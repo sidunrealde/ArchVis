@@ -241,6 +241,14 @@ The following methods currently use `IsInputKeyDown` or `WasInputKeyJustPressed`
 - [ ] Commands for objects.
 - [ ] Commands for runs.
 
+### 5.4 Trim Tool
+- [x] Create `URTPlanTrimTool` class.
+- [x] Implement "Quick Trim" logic (everything is a cutting edge).
+- [x] Implement intersection finding for trim candidates.
+- [x] Implement `SplitWall` logic (delete middle segment -> create two new walls).
+- [x] Implement `UpdateWallEndpoint` logic (shorten wall).
+- [ ] Implement Marquee/Fence trim (trim all segments crossed by drag).
+
 ---
 
 ## Networking (cross-cutting)
@@ -283,6 +291,7 @@ Create each Input Action as a new asset (Right-click → Input → Input Action)
 | `IA_ToolSelect` | Digital (Bool) | Switch to Select tool |
 | `IA_ToolLine` | Digital (Bool) | Switch to Line tool |
 | `IA_ToolPolyline` | Digital (Bool) | Switch to Polyline tool |
+| `IA_ToolTrim` | Digital (Bool) | Switch to Trim tool |
 
 #### View/Navigation Actions
 | Asset Name | Value Type | Description |
@@ -372,6 +381,7 @@ This context is **always** active regardless of mode or tool.
 | `IA_ToolSelect` | V | - |
 | `IA_ToolLine` | L | - |
 | `IA_ToolPolyline` | P | - |
+| `IA_ToolTrim` | T | - |
 
 ---
 
@@ -472,6 +482,18 @@ Polyline drawing tool controls.
 
 ---
 
+#### IMC_2D_TrimTool (Priority 2 - Active when Trim Tool in 2D)
+Trim tool controls.
+
+| Action | Key Binding | Modifiers |
+|--------|-------------|-----------|
+| `IA_DrawPlacePoint` | Left Mouse Button | - |
+| `IA_BoxSelectStart` | Left Mouse Button | Hold Time: 0.15s |
+| `IA_BoxSelectDrag` | Mouse XY 2D-Axis | - |
+| `IA_BoxSelectEnd` | Left Mouse Button (Released) | - |
+
+---
+
 #### IMC_NumericEntry (Priority 3 - Layered During Numeric Input)
 Numeric input controls - layered on top when user starts typing numbers.
 
@@ -547,6 +569,7 @@ Open the `DA_ArchVisInput` data asset (or create one based on `UArchVisInputConf
    - `IMC_2D_Selection`
    - `IMC_2D_LineTool`
    - `IMC_2D_PolylineTool`
+   - `IMC_2D_TrimTool`
    - `IMC_NumericEntry`
    - `IMC_3D_Base`
    - `IMC_3D_Selection`
@@ -615,9 +638,10 @@ In the Blueprint derived from `AArchVisPlayerController`:
 - [x] `IA_Delete` → `OnDelete`
 - [x] `IA_Save` → `OnSave`
 - [ ] `IA_ToggleView` → `OnToggleView` (wire to `CameraController->ToggleViewMode()`)
-- [ ] `IA_ToolSelect` → `OnToolSelect` (calls `ToolManager->SelectToolByType(Select)`)
-- [ ] `IA_ToolLine` → `OnToolLine` (calls `ToolManager->SelectToolByType(Line)`)
-- [ ] `IA_ToolPolyLine` → `OnToolPolyline` (calls `ToolManager->SelectToolByType(Polyline)`)
+- [x] `IA_ToolSelect` → `OnToolSelect` (calls `ToolManager->SelectToolByType(Select)`)
+- [x] `IA_ToolLine` → `OnToolLine` (calls `ToolManager->SelectToolByType(Line)`)
+- [x] `IA_ToolPolyLine` → `OnToolPolyline` (calls `ToolManager->SelectToolByType(Polyline)`)
+- [x] `IA_ToolTrim` → `OnToolTrim` (calls `ToolManager->SelectToolByType(Trim)`)
 
 ### 6.2 View/Navigation Actions - 2D Mode
 - [x] `IA_Pan` → `OnPanStarted/OnPanCompleted` (set `bPanning` state)
