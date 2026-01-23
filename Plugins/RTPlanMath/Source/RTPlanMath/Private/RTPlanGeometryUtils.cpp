@@ -65,7 +65,10 @@ bool FRTPlanGeometryUtils::SegmentIntersection(const FVector2D& A1, const FVecto
 	float Lambda = ((B2.Y - A2.Y) * (B2.X - A1.X) + (A2.X - B2.X) * (B2.Y - A1.Y)) / Det;
 	float Gamma = ((A1.Y - B1.Y) * (B2.X - A1.X) + (B1.X - A1.X) * (B2.Y - A1.Y)) / Det;
 
-	if ((0 < Lambda && Lambda < 1) && (0 < Gamma && Gamma < 1))
+	// Use inclusive check with epsilon to handle T-junctions (endpoints touching)
+	const float Epsilon = KINDA_SMALL_NUMBER;
+	
+	if ((Lambda >= -Epsilon && Lambda <= 1.0f + Epsilon) && (Gamma >= -Epsilon && Gamma <= 1.0f + Epsilon))
 	{
 		OutIntersection = A1 + Lambda * (B1 - A1);
 		return true;
@@ -79,4 +82,3 @@ bool FRTPlanGeometryUtils::SegmentsIntersect(const FVector2D& A1, const FVector2
 	FVector2D Unused;
 	return SegmentIntersection(A1, B1, A2, B2, Unused);
 }
-

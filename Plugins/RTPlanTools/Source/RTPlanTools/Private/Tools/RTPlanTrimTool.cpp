@@ -124,10 +124,7 @@ void URTPlanTrimTool::DrawMarqueeVisualization(UWorld* World) const
 {
 	if (!World || !bIsMarqueeDragging) return;
 	
-	// Draw a line for fence trim (unlike box select which draws a rect)
-	// Or maybe we want a box trim? AutoCAD trim is usually fence (line) or crossing window.
-	// Let's implement fence trim (line) as it's more intuitive for "cutting through" things.
-	
+	// Draw a line for fence trim
 	FColor TrimColor = FColor::Red;
 	float LineThickness = 2.0f;
 	float Duration = 0.0f; // Single frame
@@ -155,10 +152,49 @@ void URTPlanTrimTool::PerformClickTrim(const FVector2D& WorldPos)
 
 void URTPlanTrimTool::PerformMarqueeTrim()
 {
-	// TODO: Implement fence trim
-	// Find all walls intersecting the segment (MarqueeStartWorld -> MarqueeEndWorld)
+	if (!Document || !SpatialIndex) return;
+
+	// Fence trim: Find all walls intersected by the fence line (MarqueeStartWorld -> MarqueeEndWorld)
 	// For each intersected wall, trim the segment that was crossed.
-	UE_LOG(LogRTPlanTrimTool, Warning, TEXT("Fence trim not yet implemented"));
+
+	const FRTPlanData& Data = Document->GetData();
+	FVector2D FenceStart = MarqueeStartWorld;
+	FVector2D FenceEnd = MarqueeEndWorld;
+
+	// Use spatial index to find candidate walls in the bounding box of the fence
+	FVector2D Min(FMath::Min(FenceStart.X, FenceEnd.X), FMath::Min(FenceStart.Y, FenceEnd.Y));
+	FVector2D Max(FMath::Max(FenceStart.X, FenceEnd.X), FMath::Max(FenceStart.Y, FenceEnd.Y));
+	
+	// Add some padding to bounding box
+	float Padding = 10.0f;
+	Min -= FVector2D(Padding, Padding);
+	Max += FVector2D(Padding, Padding);
+
+	TArray<FGuid> CandidateWalls = SpatialIndex->HitTestWallsInRect(Min, Max);
+	
+	bool bAnyTrim = false;
+
+	for (const FGuid& WallId : CandidateWalls)
+	{
+		const FRTWall* Wall = Data.Walls.Find(WallId);
+		if (!Wall) continue;
+
+		const FRTVertex* V1 = Data.Vertices.Find(Wall->VertexAId);
+		const FRTVertex* V2 = Data.Vertices.Find(Wall->VertexBId);
+		if (!V1 || !V2) continue;
+
+		FVector2D Intersection;
+		if (FRTPlanGeometryUtils::SegmentIntersection(FenceStart, FenceEnd, V1->Position, V2->Position, Intersection))
+		{
+			TrimWallAtPoint(WallId, Intersection);
+			bAnyTrim = true;
+		}
+	}
+
+	if (bAnyTrim)
+	{
+		UE_LOG(LogRTPlanTrimTool, Log, TEXT("Fence trim completed"));
+	}
 }
 
 void URTPlanTrimTool::FindIntersectionsOnWall(const FGuid& WallId, TArray<float>& OutIntersections) const
@@ -200,6 +236,17 @@ void URTPlanTrimTool::FindIntersectionsOnWall(const FGuid& WallId, TArray<float>
 				if (LengthSq > KINDA_SMALL_NUMBER)
 				{
 					float T = ((Intersection - A) | AB) / LengthSq;
+					
+					// Use a slightly larger epsilon to avoid treating endpoints as intersections
+					// unless they are true T-junctions.
+					// However, for T-junctions (where one wall ends exactly on another),
+					// SegmentIntersection might return true.
+					// We want to include these points if they are strictly inside the segment [0,1]
+					// OR if they are endpoints that connect to other geometry.
+					
+					// For trim logic, we care about points that divide the wall into segments.
+					// Endpoints (0 and 1) are already added.
+					// So we only add strictly interior points.
 					if (T > KINDA_SMALL_NUMBER && T < 1.0f - KINDA_SMALL_NUMBER)
 					{
 						OutIntersections.Add(T);
@@ -246,9 +293,16 @@ void URTPlanTrimTool::TrimWallAtPoint(const FGuid& WallId, const FVector2D& Clic
 	float StartT = 0.0f;
 	float EndT = 1.0f;
 	
+	// Robustness fix: Handle cases where ClickT is very close to an intersection
+	// If ClickT is essentially equal to an intersection, we need to decide which side to trim.
+	// Usually, the user clicks slightly "inside" the segment they want to remove.
+	// But if they click exactly on a T-junction, it's ambiguous.
+	// For now, assume standard behavior.
+	
 	for (int32 i = 0; i < Intersections.Num() - 1; ++i)
 	{
-		if (ClickT >= Intersections[i] && ClickT <= Intersections[i+1])
+		// Use a small epsilon for comparison to handle precision issues
+		if (ClickT >= Intersections[i] - KINDA_SMALL_NUMBER && ClickT <= Intersections[i+1] + KINDA_SMALL_NUMBER)
 		{
 			StartT = Intersections[i];
 			EndT = Intersections[i+1];
@@ -256,6 +310,14 @@ void URTPlanTrimTool::TrimWallAtPoint(const FGuid& WallId, const FVector2D& Clic
 		}
 	}
 	
+	// Edge case fix: If StartT and EndT are effectively the same (due to multiple intersections at same point),
+	// expand to find a valid segment.
+	if (FMath::IsNearlyEqual(StartT, EndT))
+	{
+		UE_LOG(LogRTPlanTrimTool, Warning, TEXT("Trim segment collapsed (StartT ~ EndT). Aborting trim."));
+		return;
+	}
+
 	UE_LOG(LogRTPlanTrimTool, Log, TEXT("Trim segment: T [%0.2f, %0.2f]"), StartT, EndT);
 	
 	// Create macro command
@@ -269,19 +331,12 @@ void URTPlanTrimTool::TrimWallAtPoint(const FGuid& WallId, const FVector2D& Clic
 		URTCmdDeleteWall* DelCmd = NewObject<URTCmdDeleteWall>();
 		DelCmd->WallId = WallId;
 		MacroCmd->AddCommand(DelCmd);
-		
-		// Also check if vertices are orphaned and delete them?
-		// For now, keep vertices as they might be shared.
 	}
 	// Case 2: Trim start (0 to T) -> Update Vertex A
 	else if (FMath::IsNearlyEqual(StartT, 0.0f))
 	{
 		// We need to move Vertex A to EndT
 		FVector2D NewPos = A + AB * EndT;
-		
-		// Check if we need to split the vertex (if shared)
-		// For simplicity, let's assume we create a new vertex at the intersection point
-		// and update the wall to use it.
 		
 		FGuid NewVertexId = FGuid::NewGuid();
 		FRTVertex NewVertex;
