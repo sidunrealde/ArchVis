@@ -1,4 +1,4 @@
-﻿using UnrealBuildTool;
+﻿﻿using UnrealBuildTool;
 
 public class RTPlanMeshing : ModuleRules
 {
@@ -12,6 +12,7 @@ public class RTPlanMeshing : ModuleRules
 				"Core",
 				"CoreUObject",
 				"Engine",
+				"GeometryCore",
 				"GeometryFramework",
 				"GeometryScriptingCore",
 				"RTPlanCore"

@@ -92,4 +92,11 @@ private:
 
 	// Helper: Trim a wall at the clicked point
 	void TrimWallAtPoint(const FGuid& WallId, const FVector2D& ClickPoint);
+
+	// Helper: Find intersection points on an arc wall
+	// Returns a sorted list of intersection points (T values 0..1) along the arc
+	void FindIntersectionsOnArcWall(const FGuid& WallId, TArray<float>& OutIntersections) const;
+
+	// Helper: Trim an arc wall at the clicked point
+	void TrimArcWallAtPoint(const FGuid& WallId, const FVector2D& ClickPoint);
 };

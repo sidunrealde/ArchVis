@@ -272,7 +272,14 @@ void URTPlanTrimTool::TrimWallAtPoint(const FGuid& WallId, const FVector2D& Clic
 	const FRTVertex* V2 = Data.Vertices.Find(Wall->VertexBId);
 	if (!V1 || !V2) return;
 	
-	// Calculate T of click point
+	// Handle arc walls separately
+	if (Wall->bIsArc && FMath::Abs(Wall->ArcSweepAngle) > 0.1f)
+	{
+		TrimArcWallAtPoint(WallId, ClickPoint);
+		return;
+	}
+	
+	// Calculate T of click point for straight walls
 	FVector2D A = V1->Position;
 	FVector2D B = V2->Position;
 	FVector2D Closest = FRTPlanGeometryUtils::ClosestPointOnSegment(ClickPoint, A, B);
@@ -507,3 +514,293 @@ bool URTPlanTrimTool::PerformLineTrace(const FRTPointerEvent& Event, FVector& Ou
 	
 	return false;
 }
+
+void URTPlanTrimTool::FindIntersectionsOnArcWall(const FGuid& WallId, TArray<float>& OutIntersections) const
+{
+	if (!Document) return;
+	const FRTPlanData& Data = Document->GetData();
+	
+	const FRTWall* TargetWall = Data.Walls.Find(WallId);
+	if (!TargetWall || !TargetWall->bIsArc) return;
+	
+	const FRTVertex* V1 = Data.Vertices.Find(TargetWall->VertexAId);
+	const FRTVertex* V2 = Data.Vertices.Find(TargetWall->VertexBId);
+	if (!V1 || !V2) return;
+	
+	FVector2D A = V1->Position;
+	FVector2D ArcCenter = TargetWall->ArcCenter;
+	float Radius = FVector2D::Distance(ArcCenter, A);
+	
+	FVector2D ToStart = A - ArcCenter;
+	float StartAngleRad = FMath::Atan2(ToStart.Y, ToStart.X);
+	float SweepRad = FMath::DegreesToRadians(TargetWall->ArcSweepAngle);
+	
+	// Add endpoints (0 and 1)
+	OutIntersections.Add(0.0f);
+	OutIntersections.Add(1.0f);
+	
+	// Check against all other walls for intersections
+	for (const auto& Pair : Data.Walls)
+	{
+		if (Pair.Key == WallId) continue; // Skip self
+		
+		const FRTWall& OtherWall = Pair.Value;
+		const FRTVertex* OV1 = Data.Vertices.Find(OtherWall.VertexAId);
+		const FRTVertex* OV2 = Data.Vertices.Find(OtherWall.VertexBId);
+		
+		if (!OV1 || !OV2) continue;
+		
+		FVector2D OtherA = OV1->Position;
+		FVector2D OtherB = OV2->Position;
+		
+		// Find line-circle intersections
+		// Line from OtherA to OtherB, circle at ArcCenter with Radius
+		FVector2D D = OtherB - OtherA;
+		FVector2D F = OtherA - ArcCenter;
+		
+		float a = D | D;
+		float b = 2.0f * (F | D);
+		float c = (F | F) - Radius * Radius;
+		
+		float Discriminant = b * b - 4.0f * a * c;
+		
+		if (Discriminant >= 0 && a > KINDA_SMALL_NUMBER)
+		{
+			float SqrtDisc = FMath::Sqrt(Discriminant);
+			
+			// Two potential intersection points
+			float T1 = (-b - SqrtDisc) / (2.0f * a);
+			float T2 = (-b + SqrtDisc) / (2.0f * a);
+			
+			for (float T : { T1, T2 })
+			{
+				// Check if intersection is within the line segment
+				if (T >= -KINDA_SMALL_NUMBER && T <= 1.0f + KINDA_SMALL_NUMBER)
+				{
+					FVector2D IntersectionPoint = OtherA + D * T;
+					
+					// Check if intersection is within the arc's angular range
+					FVector2D ToIntersect = IntersectionPoint - ArcCenter;
+					float IntersectAngle = FMath::Atan2(ToIntersect.Y, ToIntersect.X);
+					
+					// Calculate angle difference from start
+					float AngleDiff = IntersectAngle - StartAngleRad;
+					
+					// Normalize to the sweep direction
+					if (SweepRad > 0)
+					{
+						while (AngleDiff < 0) AngleDiff += 2.0f * PI;
+						while (AngleDiff > 2.0f * PI) AngleDiff -= 2.0f * PI;
+					}
+					else
+					{
+						while (AngleDiff > 0) AngleDiff -= 2.0f * PI;
+						while (AngleDiff < -2.0f * PI) AngleDiff += 2.0f * PI;
+					}
+					
+					// Calculate T along arc (0 to 1)
+					float ArcT = AngleDiff / SweepRad;
+					
+					// Only include strictly interior points
+					if (ArcT > KINDA_SMALL_NUMBER && ArcT < 1.0f - KINDA_SMALL_NUMBER)
+					{
+						OutIntersections.Add(ArcT);
+					}
+				}
+			}
+		}
+	}
+	
+	// Sort intersections
+	OutIntersections.Sort();
+}
+
+void URTPlanTrimTool::TrimArcWallAtPoint(const FGuid& WallId, const FVector2D& ClickPoint)
+{
+	if (!Document) return;
+	const FRTPlanData& Data = Document->GetData();
+	
+	const FRTWall* Wall = Data.Walls.Find(WallId);
+	if (!Wall || !Wall->bIsArc) return;
+	
+	const FRTVertex* V1 = Data.Vertices.Find(Wall->VertexAId);
+	const FRTVertex* V2 = Data.Vertices.Find(Wall->VertexBId);
+	if (!V1 || !V2) return;
+	
+	FVector2D A = V1->Position;
+	FVector2D ArcCenter = Wall->ArcCenter;
+	float Radius = FVector2D::Distance(ArcCenter, A);
+	float SweepAngleDeg = Wall->ArcSweepAngle;
+	float SweepRad = FMath::DegreesToRadians(SweepAngleDeg);
+	
+	FVector2D ToStart = A - ArcCenter;
+	float StartAngleRad = FMath::Atan2(ToStart.Y, ToStart.X);
+	
+	// Calculate click position as T along the arc (0 to 1)
+	// Project click point onto the arc by finding the closest point
+	FVector2D ToClick = ClickPoint - ArcCenter;
+	float ClickAngle = FMath::Atan2(ToClick.Y, ToClick.X);
+	
+	// Calculate angle difference from start
+	float AngleDiff = ClickAngle - StartAngleRad;
+	
+	// Normalize to the sweep direction
+	if (SweepRad > 0)
+	{
+		while (AngleDiff < 0) AngleDiff += 2.0f * PI;
+		while (AngleDiff > 2.0f * PI) AngleDiff -= 2.0f * PI;
+		// Handle case where angle wrapped around
+		if (AngleDiff > SweepRad + 0.1f)
+		{
+			AngleDiff -= 2.0f * PI;
+		}
+	}
+	else
+	{
+		while (AngleDiff > 0) AngleDiff -= 2.0f * PI;
+		while (AngleDiff < -2.0f * PI) AngleDiff += 2.0f * PI;
+		if (AngleDiff < SweepRad - 0.1f)
+		{
+			AngleDiff += 2.0f * PI;
+		}
+	}
+	
+	float ClickT = FMath::Clamp(AngleDiff / SweepRad, 0.0f, 1.0f);
+	
+	// Find all intersections on the arc
+	TArray<float> Intersections;
+	FindIntersectionsOnArcWall(WallId, Intersections);
+	
+	// Find the segment containing ClickT
+	float StartT = 0.0f;
+	float EndT = 1.0f;
+	
+	for (int32 i = 0; i < Intersections.Num() - 1; ++i)
+	{
+		if (ClickT >= Intersections[i] - KINDA_SMALL_NUMBER && ClickT <= Intersections[i+1] + KINDA_SMALL_NUMBER)
+		{
+			StartT = Intersections[i];
+			EndT = Intersections[i+1];
+			break;
+		}
+	}
+	
+	if (FMath::IsNearlyEqual(StartT, EndT))
+	{
+		UE_LOG(LogRTPlanTrimTool, Warning, TEXT("Arc trim segment collapsed. Aborting."));
+		return;
+	}
+	
+	UE_LOG(LogRTPlanTrimTool, Log, TEXT("Arc Trim: T [%0.2f, %0.2f], ClickT=%0.2f"), StartT, EndT, ClickT);
+	
+	// Create macro command
+	URTCmdMacro* MacroCmd = NewObject<URTCmdMacro>();
+	MacroCmd->Description = TEXT("Trim Arc Wall");
+	MacroCmd->Document = Document;
+	
+	// Case 1: Trim entire arc (0 to 1) -> Delete wall
+	if (FMath::IsNearlyEqual(StartT, 0.0f) && FMath::IsNearlyEqual(EndT, 1.0f))
+	{
+		URTCmdDeleteWall* DelCmd = NewObject<URTCmdDeleteWall>();
+		DelCmd->WallId = WallId;
+		MacroCmd->AddCommand(DelCmd);
+	}
+	// Case 2: Trim start of arc (0 to EndT) -> Move VertexA and adjust sweep angle
+	else if (FMath::IsNearlyEqual(StartT, 0.0f))
+	{
+		// Calculate new start position at EndT along the arc
+		float NewStartAngle = StartAngleRad + SweepRad * EndT;
+		FVector2D NewPos = ArcCenter + FVector2D(FMath::Cos(NewStartAngle), FMath::Sin(NewStartAngle)) * Radius;
+		
+		FGuid NewVertexId = FGuid::NewGuid();
+		FRTVertex NewVertex;
+		NewVertex.Id = NewVertexId;
+		NewVertex.Position = NewPos;
+		
+		URTCmdAddVertex* AddVertCmd = NewObject<URTCmdAddVertex>();
+		AddVertCmd->Vertex = NewVertex;
+		MacroCmd->AddCommand(AddVertCmd);
+		
+		// Update wall with new start vertex and adjusted sweep angle
+		URTCmdAddWall* UpdateWallCmd = NewObject<URTCmdAddWall>();
+		UpdateWallCmd->Wall = *Wall;
+		UpdateWallCmd->Wall.VertexAId = NewVertexId;
+		// New sweep angle covers the remaining portion (1 - EndT) of original sweep
+		UpdateWallCmd->Wall.ArcSweepAngle = SweepAngleDeg * (1.0f - EndT);
+		UpdateWallCmd->bIsNew = false;
+		MacroCmd->AddCommand(UpdateWallCmd);
+	}
+	// Case 3: Trim end of arc (StartT to 1) -> Move VertexB and adjust sweep angle
+	else if (FMath::IsNearlyEqual(EndT, 1.0f))
+	{
+		// Calculate new end position at StartT along the arc
+		float NewEndAngle = StartAngleRad + SweepRad * StartT;
+		FVector2D NewPos = ArcCenter + FVector2D(FMath::Cos(NewEndAngle), FMath::Sin(NewEndAngle)) * Radius;
+		
+		FGuid NewVertexId = FGuid::NewGuid();
+		FRTVertex NewVertex;
+		NewVertex.Id = NewVertexId;
+		NewVertex.Position = NewPos;
+		
+		URTCmdAddVertex* AddVertCmd = NewObject<URTCmdAddVertex>();
+		AddVertCmd->Vertex = NewVertex;
+		MacroCmd->AddCommand(AddVertCmd);
+		
+		// Update wall with new end vertex and adjusted sweep angle
+		URTCmdAddWall* UpdateWallCmd = NewObject<URTCmdAddWall>();
+		UpdateWallCmd->Wall = *Wall;
+		UpdateWallCmd->Wall.VertexBId = NewVertexId;
+		// New sweep angle covers the first portion (StartT) of original sweep
+		UpdateWallCmd->Wall.ArcSweepAngle = SweepAngleDeg * StartT;
+		UpdateWallCmd->bIsNew = false;
+		MacroCmd->AddCommand(UpdateWallCmd);
+	}
+	// Case 4: Trim middle of arc (StartT to EndT) -> Split into two arcs
+	else
+	{
+		// Calculate positions at StartT and EndT
+		float Angle1 = StartAngleRad + SweepRad * StartT;
+		float Angle2 = StartAngleRad + SweepRad * EndT;
+		
+		FVector2D Pos1 = ArcCenter + FVector2D(FMath::Cos(Angle1), FMath::Sin(Angle1)) * Radius;
+		FVector2D Pos2 = ArcCenter + FVector2D(FMath::Cos(Angle2), FMath::Sin(Angle2)) * Radius;
+		
+		// Create two new vertices
+		FGuid V1Id = FGuid::NewGuid();
+		FGuid V2Id = FGuid::NewGuid();
+		
+		FRTVertex Vert1; Vert1.Id = V1Id; Vert1.Position = Pos1;
+		FRTVertex Vert2; Vert2.Id = V2Id; Vert2.Position = Pos2;
+		
+		URTCmdAddVertex* AddV1 = NewObject<URTCmdAddVertex>(); 
+		AddV1->Vertex = Vert1; 
+		MacroCmd->AddCommand(AddV1);
+		
+		URTCmdAddVertex* AddV2 = NewObject<URTCmdAddVertex>(); 
+		AddV2->Vertex = Vert2; 
+		MacroCmd->AddCommand(AddV2);
+		
+		// Update original arc wall to end at V1 (covers 0 to StartT)
+		URTCmdAddWall* UpdateOriginal = NewObject<URTCmdAddWall>();
+		UpdateOriginal->Wall = *Wall;
+		UpdateOriginal->Wall.VertexBId = V1Id;
+		UpdateOriginal->Wall.ArcSweepAngle = SweepAngleDeg * StartT;
+		UpdateOriginal->bIsNew = false;
+		MacroCmd->AddCommand(UpdateOriginal);
+		
+		// Create new arc wall from V2 to original B (covers EndT to 1)
+		FRTWall NewWall = *Wall;
+		NewWall.Id = FGuid::NewGuid();
+		NewWall.VertexAId = V2Id;
+		// VertexBId remains original B
+		NewWall.ArcSweepAngle = SweepAngleDeg * (1.0f - EndT);
+		
+		URTCmdAddWall* AddNewWall = NewObject<URTCmdAddWall>();
+		AddNewWall->Wall = NewWall;
+		AddNewWall->bIsNew = true;
+		MacroCmd->AddCommand(AddNewWall);
+	}
+	
+	Document->SubmitCommand(MacroCmd);
+}
+

@@ -39,22 +39,61 @@ void FRTPlanSpatialIndex::Build(const URTPlanDocument* Document)
 			FVector2D A = Data.Vertices[Wall.VertexAId].Position;
 			FVector2D B = Data.Vertices[Wall.VertexBId].Position;
 
-			// Midpoint
-			FVector2D Mid = (A + B) * 0.5f;
-			SnapPoints.Add({ Mid, TEXT("Midpoint") });
-			
-			UniqueX.AddUnique(Mid.X);
-			UniqueY.AddUnique(Mid.Y);
+			// Handle arc walls differently - add segments along the curve
+			if (Wall.bIsArc && FMath::Abs(Wall.ArcSweepAngle) > 0.1f)
+			{
+				// Calculate arc parameters
+				float CenterRadius = FVector2D::Distance(Wall.ArcCenter, A);
+				FVector2D ToStart = A - Wall.ArcCenter;
+				float StartAngleRad = FMath::Atan2(ToStart.Y, ToStart.X);
+				float SweepRad = FMath::DegreesToRadians(Wall.ArcSweepAngle);
+				
+				// Use enough segments for accurate hit testing (at least 1 per 15 degrees)
+				int32 NumSegments = FMath::Max(8, FMath::CeilToInt(FMath::Abs(Wall.ArcSweepAngle) / 15.0f));
+				float StepAngle = SweepRad / (float)NumSegments;
+				
+				// Add midpoint of the arc
+				float MidAngle = StartAngleRad + SweepRad * 0.5f;
+				FVector2D ArcMid = Wall.ArcCenter + FVector2D(FMath::Cos(MidAngle), FMath::Sin(MidAngle)) * CenterRadius;
+				SnapPoints.Add({ ArcMid, TEXT("Arc Midpoint") });
+				
+				// Add segments along the arc
+				for (int32 i = 0; i < NumSegments; ++i)
+				{
+					float Angle0 = StartAngleRad + StepAngle * i;
+					float Angle1 = StartAngleRad + StepAngle * (i + 1);
+					
+					FVector2D P0 = Wall.ArcCenter + FVector2D(FMath::Cos(Angle0), FMath::Sin(Angle0)) * CenterRadius;
+					FVector2D P1 = Wall.ArcCenter + FVector2D(FMath::Cos(Angle1), FMath::Sin(Angle1)) * CenterRadius;
+					
+					FSnapSegment Seg;
+					Seg.A = P0;
+					Seg.B = P1;
+					Seg.WallId = Wall.Id;
+					SnapSegments.Add(Seg);
+				}
+				
+				UE_LOG(LogTemp, Verbose, TEXT("  Arc Wall %s: Center=(%0.1f,%0.1f), Sweep=%0.1f°, %d segments"), 
+					*Wall.Id.ToString().Left(8), Wall.ArcCenter.X, Wall.ArcCenter.Y, Wall.ArcSweepAngle, NumSegments);
+			}
+			else
+			{
+				// Straight wall - add single segment
+				FVector2D Mid = (A + B) * 0.5f;
+				SnapPoints.Add({ Mid, TEXT("Midpoint") });
+				
+				UniqueX.AddUnique(Mid.X);
+				UniqueY.AddUnique(Mid.Y);
 
-			// Segment with WallId for hit testing
-			FSnapSegment Seg;
-			Seg.A = A;
-			Seg.B = B;
-			Seg.WallId = Wall.Id;
-			SnapSegments.Add(Seg);
-			
-			UE_LOG(LogTemp, Verbose, TEXT("  Wall %s: (%0.1f,%0.1f)->(%0.1f,%0.1f)"), 
-				*Wall.Id.ToString().Left(8), A.X, A.Y, B.X, B.Y);
+				FSnapSegment Seg;
+				Seg.A = A;
+				Seg.B = B;
+				Seg.WallId = Wall.Id;
+				SnapSegments.Add(Seg);
+				
+				UE_LOG(LogTemp, Verbose, TEXT("  Wall %s: (%0.1f,%0.1f)->(%0.1f,%0.1f)"), 
+					*Wall.Id.ToString().Left(8), A.X, A.Y, B.X, B.Y);
+			}
 		}
 	}
 	
