@@ -49,6 +49,80 @@ void FRTPlanMeshBuilder::AppendWallMesh(
 	// Real implementation needs UGeometryScriptLibrary_MeshMaterialFunctions::SetMaterialIDForMeshSelection
 }
 
+void FRTPlanMeshBuilder::AppendCurvedWallMesh(
+	UDynamicMesh* TargetMesh,
+	const FVector2D& StartPoint,
+	const FVector2D& EndPoint,
+	const FVector2D& ArcCenter,
+	float SweepAngleDeg,
+	float Thickness,
+	float Height,
+	float BaseZ,
+	int32 NumSegments,
+	int32 MaterialID_Left,
+	int32 MaterialID_Right,
+	int32 MaterialID_Caps
+)
+{
+	if (!TargetMesh || FMath::Abs(SweepAngleDeg) < 0.1f) return;
+
+	// Calculate radius from center to start point
+	float Radius = FVector2D::Distance(ArcCenter, StartPoint);
+	if (Radius < 0.1f) return;
+
+	// Calculate start angle from center to start point
+	FVector2D ToStart = StartPoint - ArcCenter;
+	float StartAngleRad = FMath::Atan2(ToStart.Y, ToStart.X);
+
+	// Adjust number of segments based on arc sweep - user controls this via NumSegments parameter
+	// But ensure minimum quality
+	NumSegments = FMath::Max(NumSegments, FMath::CeilToInt(FMath::Abs(SweepAngleDeg) / 15.0f));
+	NumSegments = FMath::Clamp(NumSegments, 4, 128);
+	
+	float SweepRad = FMath::DegreesToRadians(SweepAngleDeg);
+	float StepAngle = SweepRad / (float)NumSegments;
+
+	// Generate the curved wall as a series of connected quads
+	FGeometryScriptPrimitiveOptions Options;
+
+	for (int32 i = 0; i < NumSegments; ++i)
+	{
+		float Angle1 = StartAngleRad + StepAngle * i;
+		float Angle2 = StartAngleRad + StepAngle * (i + 1);
+
+		// Calculate the center line points on the arc
+		FVector2D P1 = ArcCenter + FVector2D(FMath::Cos(Angle1), FMath::Sin(Angle1)) * Radius;
+		FVector2D P2 = ArcCenter + FVector2D(FMath::Cos(Angle2), FMath::Sin(Angle2)) * Radius;
+
+		// Calculate segment direction and perpendicular for thickness offset
+		FVector2D SegDir = (P2 - P1).GetSafeNormal();
+		float SegAngle = FMath::Atan2(SegDir.Y, SegDir.X);
+		
+		// Calculate segment properties
+		float SegLength = FVector2D::Distance(P1, P2);
+		FVector2D SegMid = (P1 + P2) * 0.5f;
+
+		// Create transform for the segment
+		float ZCenter = BaseZ + (Height * 0.5f);
+		FVector SegCenter(SegMid.X, SegMid.Y, ZCenter);
+		FQuat SegRotation(FVector::UpVector, SegAngle);
+
+		FTransform SegTransform;
+		SegTransform.SetLocation(SegCenter);
+		SegTransform.SetRotation(SegRotation);
+
+		// Append box segment - this creates a continuous wall when segments are adjacent
+		UGeometryScriptLibrary_MeshPrimitiveFunctions::AppendBox(
+			TargetMesh,
+			Options,
+			SegTransform,
+			SegLength,
+			Thickness,
+			Height
+		);
+	}
+}
+
 void FRTPlanMeshBuilder::AppendFloorMesh(
 	UDynamicMesh* TargetMesh,
 	const TArray<FVector2D>& Polygon,

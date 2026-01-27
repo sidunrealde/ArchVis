@@ -71,6 +71,7 @@ protected:
 	void OnToolSelect(const FInputActionValue& Value);
 	void OnToolLine(const FInputActionValue& Value);
 	void OnToolPolyline(const FInputActionValue& Value);
+	void OnToolArc(const FInputActionValue& Value);
 
 	// Helper to get the owning player controller
 	AArchVisPlayerController* GetArchVisController() const;
@@ -101,4 +102,3 @@ private:
 	bool bDebugEnabled = false;
 	bool bIsInitialized = false;
 };
-

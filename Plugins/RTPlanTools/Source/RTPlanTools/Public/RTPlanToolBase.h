@@ -35,6 +35,10 @@ public:
 	// Handle numeric input with field type specification
 	virtual void OnNumericInputWithField(float Value, ERTNumericField Field) { OnNumericInput(Value); }
 
+	// Get current drafting state for HUD visualization
+	UFUNCTION(BlueprintCallable, Category = "RTPlan|Tools")
+	virtual FRTDraftingState GetDraftingState() const { return FRTDraftingState(); }
+
 	// Render tool visualization (gizmos, preview lines)
 	// Usually called from the HUD or a SceneProxy
 	virtual void DrawVisualization(class FPrimitiveDrawInterface* PDI, const FSceneView* View) {}

@@ -91,6 +91,31 @@ struct RTPLANINPUT_API FRTDraftingState
 	// Is ortho snap currently active?
 	UPROPERTY(BlueprintReadOnly)
 	bool bOrthoSnapped = false;
+
+	// --- Arc Visualization ---
+	// Is this an arc operation?
+	UPROPERTY(BlueprintReadOnly)
+	bool bIsArc = false;
+
+	// Center of the arc
+	UPROPERTY(BlueprintReadOnly)
+	FVector2D ArcCenter = FVector2D::ZeroVector;
+
+	// Radius of the arc
+	UPROPERTY(BlueprintReadOnly)
+	float ArcRadius = 0.0f;
+
+	// Start angle of the arc (degrees)
+	UPROPERTY(BlueprintReadOnly)
+	float ArcStartAngle = 0.0f;
+
+	// End angle of the arc (degrees)
+	UPROPERTY(BlueprintReadOnly)
+	float ArcEndAngle = 0.0f;
+
+	// Third point (cursor position) for arc - used for line drafting visualization from EndPoint to cursor
+	UPROPERTY(BlueprintReadOnly)
+	FVector2D ArcThirdPoint = FVector2D::ZeroVector;
 };
 
 /**
@@ -247,6 +272,27 @@ struct RTPLANINPUT_API FRTNumericInputBuffer
 				SavedAngleDegrees = Value;
 				bHasSavedAngle = true;
 			}
+		}
+	}
+
+	// Restore saved value for the current field (call after switching ActiveField)
+	void RestoreFieldValue()
+	{
+		if (ActiveField == ERTNumericField::Length && bHasSavedLength)
+		{
+			// Convert from internal cm to current display unit
+			float DisplayValue = GetDisplayValue(SavedLengthCm);
+			Buffer = FString::Printf(TEXT("%.2f"), DisplayValue);
+			bIsActive = true;
+		}
+		else if (ActiveField == ERTNumericField::Angle && bHasSavedAngle)
+		{
+			Buffer = FString::Printf(TEXT("%.2f"), SavedAngleDegrees);
+			bIsActive = true;
+		}
+		else
+		{
+			Buffer.Empty();
 		}
 	}
 

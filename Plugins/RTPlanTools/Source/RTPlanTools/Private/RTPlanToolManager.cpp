@@ -2,6 +2,7 @@
 #include "Tools/RTPlanSelectTool.h"
 #include "Tools/RTPlanLineTool.h"
 #include "Tools/RTPlanTrimTool.h"
+#include "Tools/RTPlanArcTool.h"
 #include "RTPlanCommand.h"
 
 void URTPlanToolManager::Initialize(URTPlanDocument* InDoc)
@@ -49,6 +50,10 @@ void URTPlanToolManager::SelectTool(TSubclassOf<URTPlanToolBase> ToolClass)
 		else if (ToolClass->IsChildOf(URTPlanTrimTool::StaticClass()))
 		{
 			ActiveToolType = ERTPlanToolType::Trim;
+		}
+		else if (ToolClass->IsChildOf(URTPlanArcTool::StaticClass()))
+		{
+			ActiveToolType = ERTPlanToolType::Arc;
 		}
 	}
 }
@@ -103,6 +108,12 @@ void URTPlanToolManager::SelectToolByType(ERTPlanToolType ToolType)
 
 	case ERTPlanToolType::Trim:
 		ActiveTool = NewObject<URTPlanTrimTool>(this);
+		ActiveTool->Init(Document, &SpatialIndex);
+		ActiveTool->OnEnter();
+		break;
+
+	case ERTPlanToolType::Arc:
+		ActiveTool = NewObject<URTPlanArcTool>(this);
 		ActiveTool->Init(Document, &SpatialIndex);
 		ActiveTool->OnEnter();
 		break;

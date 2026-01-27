@@ -100,6 +100,7 @@ The following methods currently use `IsInputKeyDown` or `WasInputKeyJustPressed`
 - [x] Length label with units displayed near the measurement line.
 - [x] Angle label with degree symbol near the arc.
 - [x] Active/inactive input field color differentiation (blue=active, gray=inactive).
+- [x] Arc tool visualization (AutoCAD-style 3-point arc preview using screen-space angle calculation for consistency with mesh).
 - [-] 2D plan visualization (existing walls/openings) is not yet drawn here.
 
 ### 1.3 Input handling: virtual cursor + sensitivity + numeric buffer
@@ -112,9 +113,11 @@ The following methods currently use `IsInputKeyDown` or `WasInputKeyJustPressed`
 - [x] Input action slots added to `UArchVisInputConfig` for numeric entry.
 - [x] Numeric input handlers in `AArchVisPlayerController` (digit, decimal, backspace, commit, clear, switch field, cycle units).
 - [x] Enter-to-commit numeric input into active tool (`OnNumericInput`).
-- [x] Tab-to-switch numeric fields (length/angle).
+- [x] Tab-to-switch numeric fields (length/angle) - view toggle blocked for all drawing tools (Line/Polyline/Arc).
+- [x] Saved values displayed in inactive field labels when switching between Length/Angle.
 - [x] Unit cycling via keyboard action.
 - [x] Real-time preview update while typing numeric values (`UpdatePreviewFromLength`, `UpdatePreviewFromAngle`).
+- [x] Numeric entry context kept active after commit for drawing tools (Line/Polyline/Arc).
 - [ ] Hook `MouseSensitivity` to a settings source (config / `UGameUserSettings` / settings subsystem).
 
 ### 1.4 Modular Input Mapping Context System

@@ -66,4 +66,3 @@ protected:
 	UPROPERTY(Transient)
 	TSet<FGuid> SelectedWallIds;
 };
-

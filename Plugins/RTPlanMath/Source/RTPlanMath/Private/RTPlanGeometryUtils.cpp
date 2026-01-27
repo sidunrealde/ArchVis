@@ -94,3 +94,31 @@ bool FRTPlanGeometryUtils::SegmentsIntersect(const FVector2D& A1, const FVector2
 	FVector2D Unused;
 	return SegmentIntersection(A1, B1, A2, B2, Unused);
 }
+
+FVector2D FRTPlanGeometryUtils::GetPointFromPolar(const FVector2D& Center, float Radius, float AngleDegrees)
+{
+	float AngleRadians = FMath::DegreesToRadians(AngleDegrees);
+	return Center + FVector2D(FMath::Cos(AngleRadians), FMath::Sin(AngleRadians)) * Radius;
+}
+
+float FRTPlanGeometryUtils::GetAngleDegrees(const FVector2D& A, const FVector2D& B)
+{
+	FVector2D Direction = B - A;
+	float AngleRadians = FMath::Atan2(Direction.Y, Direction.X);
+	return FMath::RadiansToDegrees(AngleRadians);
+}
+
+void FRTPlanGeometryUtils::GenerateArcPoints(const FVector2D& Center, float Radius, float StartAngleDegrees, float SweepAngleDegrees, int32 NumSegments, TArray<FVector2D>& OutPoints)
+{
+	if (NumSegments <= 0)
+	{
+		return;
+	}
+
+	float Step = SweepAngleDegrees / (float)NumSegments;
+	for (int32 i = 0; i <= NumSegments; ++i)
+	{
+		float Angle = StartAngleDegrees + Step * i;
+		OutPoints.Add(GetPointFromPolar(Center, Radius, Angle));
+	}
+}

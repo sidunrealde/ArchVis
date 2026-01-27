@@ -26,4 +26,15 @@ public:
 
 	// Check if two segments intersect (simplified, no intersection point returned)
 	static bool SegmentsIntersect(const FVector2D& A1, const FVector2D& B1, const FVector2D& A2, const FVector2D& B2);
+
+	// --- Arc / Polar Utilities ---
+
+	// Calculate a point given a center, radius, and angle in degrees (0 is +X, CCW)
+	static FVector2D GetPointFromPolar(const FVector2D& Center, float Radius, float AngleDegrees);
+
+	// Calculate the angle in degrees of the vector from A to B (0 is +X, CCW)
+	static float GetAngleDegrees(const FVector2D& A, const FVector2D& B);
+
+	// Generate points for an arc.
+	static void GenerateArcPoints(const FVector2D& Center, float Radius, float StartAngleDegrees, float SweepAngleDegrees, int32 NumSegments, TArray<FVector2D>& OutPoints);
 };

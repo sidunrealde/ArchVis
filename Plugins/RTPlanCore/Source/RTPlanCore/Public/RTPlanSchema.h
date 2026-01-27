@@ -51,6 +51,7 @@ struct RTPLANCORE_API FRTVertex
  * Wall definition.
  * Direction is from VertexA to VertexB.
  * Left/Right is relative to this direction.
+ * For curved walls, the arc is defined by Center, Radius, and SweepAngle.
  */
 USTRUCT(BlueprintType)
 struct RTPLANCORE_API FRTWall
@@ -74,6 +75,23 @@ struct RTPLANCORE_API FRTWall
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere)
 	float BaseZCm = 0.0f;
+
+	// --- Arc/Curve Properties ---
+	// If bIsArc is true, the wall is curved from VertexA to VertexB along an arc
+	UPROPERTY(BlueprintReadWrite, EditAnywhere)
+	bool bIsArc = false;
+
+	// Center point of the arc (only used if bIsArc is true)
+	UPROPERTY(BlueprintReadWrite, EditAnywhere)
+	FVector2D ArcCenter = FVector2D::ZeroVector;
+
+	// Sweep angle in degrees (positive = CCW, negative = CW)
+	UPROPERTY(BlueprintReadWrite, EditAnywhere)
+	float ArcSweepAngle = 0.0f;
+
+	// Number of segments for arc mesh subdivision (0 = auto-calculate based on sweep angle)
+	UPROPERTY(BlueprintReadWrite, EditAnywhere)
+	int32 ArcNumSegments = 0;
 
 	// --- Skirting (Baseboard) Settings ---
 

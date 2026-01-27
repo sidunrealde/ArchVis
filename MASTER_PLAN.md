@@ -16,7 +16,7 @@
 | **RTPlanMath** | 2D geometry utilities, distance calculations, intersections | ✅ Done |
 | **RTPlanSpatial** | Spatial indexing, snap queries, hit testing | ✅ Done |
 | **RTPlanInput** | Unified pointer events (`FRTPointerEvent`), modifier key states | ✅ Done |
-| **RTPlanTools** | Tool framework, LineTool, SelectTool, ToolManager | ✅ Done |
+| **RTPlanTools** | Tool framework, LineTool, ArcTool, SelectTool, ToolManager | ✅ Done |
 | **RTPlanMeshing** | Dynamic mesh generation for walls | ✅ Done |
 | **RTPlanShell** | 3D wall mesh rendering (`ARTPlanShellActor`) | ✅ Partial |
 | **RTPlanOpenings** | Door/Window wall splitting utilities | ✅ Partial |
@@ -37,7 +37,7 @@
 | `AArchVisOrbitPawn` | ✅ 3D Perspective orbit camera (uses UOrbitInputComponent) |
 | `AArchVisFirstPersonPawn` | ✅ First-person walkthrough character |
 | `AArchVisThirdPersonPawn` | ✅ Third-person walkthrough character |
-| `AArchVisHUD` | ✅ Crosshair, Wall Preview, Measurements, Length/Angle Labels |
+| `AArchVisHUD` | ✅ Crosshair, Wall Preview, Measurements, Length/Angle Labels, Arc Preview (screen-space angles) |
 
 ### Modular Input Components (`Source/ArchVis/Public/Input/`)
 | Component | Status | Description |
@@ -111,6 +111,7 @@ All IMC assets have been created in `Content/Input/`:
 - `IMC_2DSelection` (Priority 2 - Select Tool)
 - `IMC_2DLineTool` (Priority 2 - Line Tool)
 - `IMC_2DPolylineTool` (Priority 2 - Polyline Tool)
+- `IMC_2DArcTool` (Priority 2 - Arc Tool)
 - `IMC_2DTrimTool` (Priority 2 - Trim Tool)
 - `IMC_3DBase` (Priority 1 - 3D Mode)
 - `IMC_3DSelection` (Priority 2 - 3D Selection)
@@ -126,7 +127,7 @@ All Input Actions have been created in `Content/Input/Actions/`:
 - `IA_ModifierCtrl`, `IA_ModifierShift`, `IA_ModifierAlt`
 - `IA_Undo`, `IA_Redo`, `IA_Delete`, `IA_Save`, `IA_Escape`
 - `IA_ToggleView`
-- `IA_ToolSelect`, `IA_ToolLine`, `IA_ToolPolyLine`, `IA_ToolTrim`
+- `IA_ToolSelect`, `IA_ToolLine`, `IA_ToolPolyLine`, `IA_ToolArc`, `IA_ToolTrim`
 
 **View Actions (`ViewActions/`):**
 - `IA_Pan`, `IA_PanDelta`, `IA_Zoom`
@@ -177,10 +178,11 @@ This section tracks the implementation of C++ handlers for each Input Action.
 | `IA_Delete` | `OnDelete` | ✅ Done | Delete selection |
 | `IA_Save` | `OnSave` | ✅ Done | Save document |
 | `IA_ToggleView` | `OnToggleView` | ⏳ Pending | Wire to CameraController |
-| `IA_ToolSelect` | `OnToolSelect` | ⏳ Pending | `ToolManager->SelectToolByType(Select)` |
-| `IA_ToolLine` | `OnToolLine` | ⏳ Pending | `ToolManager->SelectToolByType(Line)` |
-| `IA_ToolPolyLine` | `OnToolPolyline` | ⏳ Pending | `ToolManager->SelectToolByType(Polyline)` |
-| `IA_ToolTrim` | `OnToolTrim` | ⏳ Pending | `ToolManager->SelectToolByType(Trim)` |
+| `IA_ToolSelect` | `OnToolSelect` | ✅ Done | `ToolManager->SelectToolByType(Select)` |
+| `IA_ToolLine` | `OnToolLine` | ✅ Done | `ToolManager->SelectToolByType(Line)` |
+| `IA_ToolPolyLine` | `OnToolPolyline` | ✅ Done | `ToolManager->SelectToolByType(Polyline)` |
+| `IA_ToolArc` | `OnToolArc` | ✅ Done | `ToolManager->SelectToolByType(Arc)` |
+| `IA_ToolTrim` | `OnToolTrim` | ✅ Done | `ToolManager->SelectToolByType(Trim)` |
 
 #### View/Navigation Actions - 2D Mode
 | Action | Handler | Status | Notes |
@@ -243,9 +245,9 @@ This section tracks the implementation of C++ handlers for each Input Action.
 | `IA_NumericDigit` | `OnNumericDigit` | ✅ Done | Parse scalar value to digit |
 | `IA_NumericDecimal` | `OnNumericDecimal` | ✅ Done | Add decimal point |
 | `IA_NumericBackspace` | `OnNumericBackspace` | ✅ Done | Remove last char / RemoveLastPoint when empty |
-| `IA_NumericCommit` | `OnNumericCommit` | ✅ Done | Commit value to tool |
+| `IA_NumericCommit` | `OnNumericCommit` | ✅ Done | Commit value to tool (keeps numeric context for Line/Polyline/Arc) |
 | `IA_NumericCancel` | `OnNumericCancel` | ✅ Done | Cancel numeric entry |
-| `IA_NumericSwitchField` | `OnNumericSwitchField` | ✅ Done | Toggle length/angle |
+| `IA_NumericSwitchField` | `OnNumericSwitchField` | ✅ Done | Toggle length/angle (Tab); view toggle blocked for all drawing tools (Line/Polyline/Arc) |
 | `IA_NumericCycleUnits` | `OnNumericCycleUnits` | ✅ Done | Cycle cm/m/in/ft (preserves length) |
 | `IA_NumericAdd` | `OnNumericOperator` | ⏳ Pending | Future: Calculator |
 | `IA_NumericSubtract` | `OnNumericOperator` | ⏳ Pending | Future: Calculator |
@@ -278,6 +280,7 @@ This section tracks the implementation of C++ handlers for each Input Action.
 [x] IA_ToolSelect → ToolManager->SelectToolByType(ERTPlanToolType::Select)
 [x] IA_ToolLine → ToolManager->SelectToolByType(ERTPlanToolType::Line)
 [x] IA_ToolPolyLine → ToolManager->SelectToolByType(ERTPlanToolType::Polyline)
+[x] IA_ToolArc → ToolManager->SelectToolByType(ERTPlanToolType::Arc)
 [x] Update active IMC when tool changes
 ```
 
@@ -331,7 +334,7 @@ This section tracks the implementation of C++ handlers for each Input Action.
 
 ### Milestone 1: Full Input Functionality (Current)
 - All input actions wired and functional
-- Tool switching via hotkeys (V, L, P)
+- Tool switching via hotkeys (V, L, P, A, T)
 - Complete 2D drafting workflow
 - Numeric input fully integrated
 
@@ -375,6 +378,7 @@ This section tracks the implementation of C++ handlers for each Input Action.
 | `Source/ArchVis/Private/ArchVisThirdPersonPawn.cpp` | Third-person walkthrough character |
 | `Source/ArchVis/Private/ArchVisCameraController.cpp` | Legacy camera modes (deprecated) |
 | `Plugins/RTPlanTools/Private/Tools/RTPlanLineTool.cpp` | Line/Polyline tool |
+| `Plugins/RTPlanTools/Private/Tools/RTPlanArcTool.cpp` | Arc tool |
 | `Plugins/RTPlanTools/Private/Tools/RTPlanSelectTool.cpp` | Selection tool |
 | `Plugins/RTPlanTools/Private/RTPlanToolManager.cpp` | Tool lifecycle management |
 
@@ -407,4 +411,3 @@ The following documents have been consolidated into this master plan:
 - `plan-uiAndSelectionTool.prompt.md` - UI and Selection Tool plan
 
 The detailed task checklist remains in `TASKS_CHECKLIST.md` for granular tracking.
-

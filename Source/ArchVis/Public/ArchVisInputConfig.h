@@ -18,6 +18,8 @@
  * │   │   └── IMC_NumericEntry (Priority: 3 - Layered when typing)
  * │   ├── IMC_2D_PolylineTool (Priority: 2)
  * │   │   └── IMC_NumericEntry (Priority: 3 - Layered when typing)
+ * │   ├── IMC_2D_ArcTool (Priority: 2)
+ * │   │   └── IMC_NumericEntry (Priority: 3 - Layered when typing)
  * │   └── IMC_2D_TrimTool (Priority: 2)
  * │
  * └── IMC_3D_Base (Priority: 1 - When in 3D mode)
@@ -60,6 +62,11 @@ public:
 	// Contains: DrawPlacePoint, DrawConfirm, DrawCancel, DrawClose, DrawRemoveLastPoint
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Contexts|2D")
 	TObjectPtr<UInputMappingContext> IMC_2D_PolylineTool;
+
+	// 2D Arc tool context (Priority 2)
+	// Contains: DrawPlacePoint, DrawCancel, OrthoLock
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Contexts|2D")
+	TObjectPtr<UInputMappingContext> IMC_2D_ArcTool;
 
 	// 2D Trim tool context (Priority 2)
 	// Contains: Select, BoxSelect
@@ -303,6 +310,9 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Tools")
 	TObjectPtr<UInputAction> IA_ToolPolyline;  // P key
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Tools")
+	TObjectPtr<UInputAction> IA_ToolArc;  // A key
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Tools")
 	TObjectPtr<UInputAction> IA_ToolTrim;  // T key

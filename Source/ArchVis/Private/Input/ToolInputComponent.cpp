@@ -8,6 +8,7 @@
 #include "RTPlanToolManager.h"
 #include "RTPlanToolBase.h"
 #include "Tools/RTPlanLineTool.h"
+#include "Tools/RTPlanArcTool.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "Engine/LocalPlayer.h"
@@ -54,6 +55,10 @@ void UToolInputComponent::Initialize(UArchVisInputConfig* InInputConfig, UEnhanc
 	if (InputConfig->IA_ToolPolyline)
 	{
 		InputComponent->BindAction(InputConfig->IA_ToolPolyline, ETriggerEvent::Triggered, this, &UToolInputComponent::OnToolPolyline);
+	}
+	if (InputConfig->IA_ToolArc)
+	{
+		InputComponent->BindAction(InputConfig->IA_ToolArc, ETriggerEvent::Triggered, this, &UToolInputComponent::OnToolArc);
 	}
 
 	// Bind drawing actions
@@ -249,6 +254,10 @@ void UToolInputComponent::OnDrawCancel(const FInputActionValue& Value)
 			{
 				LineTool->CancelDrawing();
 			}
+			else if (URTPlanArcTool* ArcTool = Cast<URTPlanArcTool>(ToolMgr->GetActiveTool()))
+			{
+				ArcTool->CancelDrawing();
+			}
 		}
 	}
 
@@ -378,6 +387,22 @@ void UToolInputComponent::OnToolPolyline(const FInputActionValue& Value)
 	}
 }
 
+void UToolInputComponent::OnToolArc(const FInputActionValue& Value)
+{
+	if (AArchVisGameMode* GM = Cast<AArchVisGameMode>(UGameplayStatics::GetGameMode(this)))
+	{
+		if (URTPlanToolManager* ToolMgr = GM->GetToolManager())
+		{
+			ToolMgr->SelectToolByType(ERTPlanToolType::Arc);
+		}
+	}
+
+	if (bDebugEnabled)
+	{
+		UE_LOG(LogToolInput, Log, TEXT("OnToolArc"));
+	}
+}
+
 // --- Helpers ---
 
 AArchVisPlayerController* UToolInputComponent::GetArchVisController() const
@@ -431,4 +456,3 @@ void UToolInputComponent::RemoveMappingContext(UInputMappingContext* Context)
 		}
 	}
 }
-

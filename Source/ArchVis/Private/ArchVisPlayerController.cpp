@@ -11,6 +11,7 @@
 #include "RTPlanToolManager.h"
 #include "RTPlanToolBase.h"
 #include "Tools/RTPlanLineTool.h"
+#include "Tools/RTPlanArcTool.h"
 #include "Tools/RTPlanSelectTool.h"
 #include "RTPlanShellActor.h"
 #include "Kismet/GameplayStatics.h"
@@ -230,6 +231,10 @@ void AArchVisPlayerController::SetupInputComponent()
 		if (InputConfig->IA_ToolPolyline)
 		{
 			EIC->BindAction(InputConfig->IA_ToolPolyline, ETriggerEvent::Started, this, &AArchVisPlayerController::OnToolPolylineHotkey);
+		}
+		if (InputConfig->IA_ToolArc)
+		{
+			EIC->BindAction(InputConfig->IA_ToolArc, ETriggerEvent::Started, this, &AArchVisPlayerController::OnToolArcHotkey);
 		}
 		if (InputConfig->IA_ToolTrim)
 		{
@@ -553,6 +558,10 @@ void AArchVisPlayerController::SwitchTo2DToolMode(EArchVis2DToolMode NewToolMode
 		ActiveToolIMC = InputConfig->IMC_2D_PolylineTool;
 		break;
 
+	case EArchVis2DToolMode::ArcTool:
+		ActiveToolIMC = InputConfig->IMC_2D_ArcTool;
+		break;
+
 	case EArchVis2DToolMode::TrimTool:
 		ActiveToolIMC = InputConfig->IMC_2D_TrimTool;
 		break;
@@ -569,7 +578,7 @@ void AArchVisPlayerController::SwitchTo2DToolMode(EArchVis2DToolMode NewToolMode
 
 	// For drawing tools (Line/Polyline), enable numeric entry context immediately
 	// so digit keys are available for precision input without needing a bootstrap trigger
-	if (NewToolMode == EArchVis2DToolMode::LineTool || NewToolMode == EArchVis2DToolMode::PolylineTool)
+	if (NewToolMode == EArchVis2DToolMode::LineTool || NewToolMode == EArchVis2DToolMode::PolylineTool || NewToolMode == EArchVis2DToolMode::ArcTool)
 	{
 		ActivateNumericEntryContext();
 	}
@@ -583,6 +592,7 @@ void AArchVisPlayerController::ClearAllToolContexts()
 	RemoveMappingContext(InputConfig->IMC_2D_Selection);
 	RemoveMappingContext(InputConfig->IMC_2D_LineTool);
 	RemoveMappingContext(InputConfig->IMC_2D_PolylineTool);
+	RemoveMappingContext(InputConfig->IMC_2D_ArcTool);
 	RemoveMappingContext(InputConfig->IMC_2D_TrimTool);
 	RemoveMappingContext(InputConfig->IMC_3D_Selection);
 	RemoveMappingContext(InputConfig->IMC_3D_Navigation);
@@ -786,9 +796,17 @@ void AArchVisPlayerController::OnGridToggle(const FInputActionValue& Value)
 
 void AArchVisPlayerController::OnToggleView(const FInputActionValue& Value)
 {
+	// Block view toggling while numeric entry is active (Tab should switch fields)
+	if (bNumericEntryContextActive)
+	{
+		return;
+	}
+
 	// Only allow view toggling if we are in Selection mode (or no tool)
 	// This prevents accidental mode switching while drawing tools are active
-	if (Current2DToolMode == EArchVis2DToolMode::LineTool || Current2DToolMode == EArchVis2DToolMode::PolylineTool)
+	if (Current2DToolMode == EArchVis2DToolMode::LineTool || 
+		Current2DToolMode == EArchVis2DToolMode::PolylineTool ||
+		Current2DToolMode == EArchVis2DToolMode::ArcTool)
 	{
 		return;
 	}
@@ -1334,7 +1352,8 @@ void AArchVisPlayerController::OnNumericCommit(const FInputActionValue& Value)
 		
 		// Only deactivate if NOT in a drawing tool that supports continuous input
 		bool bIsDrawingTool = (Current2DToolMode == EArchVis2DToolMode::LineTool || 
-							   Current2DToolMode == EArchVis2DToolMode::PolylineTool);
+							   Current2DToolMode == EArchVis2DToolMode::PolylineTool ||
+							   Current2DToolMode == EArchVis2DToolMode::ArcTool);
 		
 		if (!bIsDrawingTool)
 		{
@@ -1383,8 +1402,11 @@ void AArchVisPlayerController::OnNumericSwitchField(const FInputActionValue& Val
 		NumericInputBuffer.ActiveField = ERTNumericField::Length;
 	}
 	
-	// Clear buffer for new field input
-	NumericInputBuffer.Buffer.Empty();
+	// Restore any previously saved value for the new field
+	NumericInputBuffer.RestoreFieldValue();
+	
+	// Update the tool preview with the restored value
+	UpdateToolPreviewFromBuffer();
 	
 	UE_LOG(LogArchVisPC, Log, TEXT("Switched to field: %s"),
 		NumericInputBuffer.ActiveField == ERTNumericField::Length ? TEXT("Length") : TEXT("Angle"));
@@ -1600,6 +1622,20 @@ void AArchVisPlayerController::OnToolPolylineHotkey(const FInputActionValue& Val
 	}
 }
 
+void AArchVisPlayerController::OnToolArcHotkey(const FInputActionValue& Value)
+{
+	UE_LOG(LogArchVisPC, Log, TEXT("OnToolArcHotkey triggered"));
+	if (AArchVisGameMode* GM = Cast<AArchVisGameMode>(UGameplayStatics::GetGameMode(this)))
+	{
+		if (URTPlanToolManager* ToolMgr = GM->GetToolManager())
+		{
+			ToolMgr->SelectToolByType(ERTPlanToolType::Arc);
+			OnToolChanged(ERTPlanToolType::Arc);
+			SwitchTo2DToolMode(EArchVis2DToolMode::ArcTool);
+		}
+	}
+}
+
 void AArchVisPlayerController::OnToolTrimHotkey(const FInputActionValue& Value)
 {
 	UE_LOG(LogArchVisPC, Log, TEXT("OnToolTrimHotkey triggered"));
@@ -1628,6 +1664,7 @@ void AArchVisPlayerController::UpdateToolPreviewFromBuffer()
 	{
 		if (URTPlanToolManager* ToolMgr = GM->GetToolManager())
 		{
+			// Handle Line Tool
 			if (URTPlanLineTool* LineTool = Cast<URTPlanLineTool>(ToolMgr->GetActiveTool()))
 			{
 				if (NumericInputBuffer.ActiveField == ERTNumericField::Length)
@@ -1639,6 +1676,20 @@ void AArchVisPlayerController::UpdateToolPreviewFromBuffer()
 					// Clamp angle to 0-180 degrees
 					Value = FMath::Clamp(Value, 0.0f, 180.0f);
 					LineTool->UpdatePreviewFromAngle(Value);
+				}
+			}
+			// Handle Arc Tool
+			else if (URTPlanArcTool* ArcTool = Cast<URTPlanArcTool>(ToolMgr->GetActiveTool()))
+			{
+				if (NumericInputBuffer.ActiveField == ERTNumericField::Length)
+				{
+					ArcTool->UpdatePreviewFromLength(Value);
+				}
+				else
+				{
+					// Clamp angle to 0-180 degrees
+					Value = FMath::Clamp(Value, 0.0f, 180.0f);
+					ArcTool->UpdatePreviewFromAngle(Value);
 				}
 			}
 		}
@@ -1668,7 +1719,11 @@ void AArchVisPlayerController::CommitNumericInput()
 		}
 	}
 	
-	NumericInputBuffer.Clear();
+	// Clear the buffer but keep the input mode ready for the next value
+	// This allows multi-step tools (like arc) to continue accepting numeric input
+	NumericInputBuffer.Buffer.Empty();
+	NumericInputBuffer.bIsActive = false;
+	// Don't clear saved values - they may be needed for switching fields
 }
 
 FRTPointerEvent AArchVisPlayerController::GetPointerEvent(ERTPointerAction Action) const

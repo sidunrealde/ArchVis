@@ -17,7 +17,8 @@ enum class ERTPlanToolType : uint8
 	Select,
 	Line,
 	Polyline,
-	Trim
+	Trim,
+	Arc
 };
 
 class URTPlanSelectTool;

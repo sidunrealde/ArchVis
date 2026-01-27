@@ -26,6 +26,22 @@ public:
 		int32 MaterialID_Caps
 	);
 
+	// Generate a curved wall mesh (arc wall)
+	static void AppendCurvedWallMesh(
+		UDynamicMesh* TargetMesh,
+		const FVector2D& StartPoint,
+		const FVector2D& EndPoint,
+		const FVector2D& ArcCenter,
+		float SweepAngleDeg,
+		float Thickness,
+		float Height,
+		float BaseZ,
+		int32 NumSegments,
+		int32 MaterialID_Left,
+		int32 MaterialID_Right,
+		int32 MaterialID_Caps
+	);
+
 	// Generate a floor mesh from a polygon loop
 	static void AppendFloorMesh(
 		UDynamicMesh* TargetMesh,

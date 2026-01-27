@@ -172,7 +172,33 @@ void ARTPlanShellActor::RebuildAll()
 		if (!Mesh) continue;
 		Mesh->Reset();
 
-		// Calculate Transform Base
+		// Handle curved walls (arcs)
+		if (Wall.bIsArc && FMath::Abs(Wall.ArcSweepAngle) > 0.1f)
+		{
+			// Use wall's segment count if specified, otherwise use default
+			int32 NumSegments = (Wall.ArcNumSegments > 0) ? Wall.ArcNumSegments : 32;
+			
+			FRTPlanMeshBuilder::AppendCurvedWallMesh(
+				Mesh,
+				A,  // Start point
+				B,  // End point
+				Wall.ArcCenter,
+				Wall.ArcSweepAngle,
+				Wall.ThicknessCm,
+				Wall.HeightCm,
+				Wall.BaseZCm,
+				NumSegments,
+				0, 0, 0  // Material IDs
+			);
+			
+			// Apply selection highlight
+			bool bIsSelected = SelectedWallIds.Contains(Wall.Id);
+			WallMeshComp->SetRenderCustomDepth(bIsSelected);
+			WallMeshComp->SetCustomDepthStencilValue(bIsSelected ? SelectionStencilValue : 0);
+			continue;  // Skip straight wall processing
+		}
+
+		// Calculate Transform Base for straight wall
 		FVector2D Dir = (B - A).GetSafeNormal();
 		float Angle = FMath::Atan2(Dir.Y, Dir.X);
 		FQuat WallRotation(FVector::UpVector, Angle);

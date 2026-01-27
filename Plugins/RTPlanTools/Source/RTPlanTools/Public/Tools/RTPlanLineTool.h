@@ -26,8 +26,8 @@ public:
 	void SetPolylineMode(bool bEnable);
 
 	// Get current drafting state for HUD visualization
-	UFUNCTION(BlueprintCallable, Category = "RTPlan|Tools")
-	FRTDraftingState GetDraftingState() const;
+	// UFUNCTION(BlueprintCallable, Category = "RTPlan|Tools")
+	virtual FRTDraftingState GetDraftingState() const override;
 
 	// Get current line length in cm
 	UFUNCTION(BlueprintCallable, Category = "RTPlan|Tools")
