@@ -70,6 +70,18 @@ bool FRTPlanGeometryUtils::SegmentIntersection(const FVector2D& A1, const FVecto
 	
 	if ((Lambda >= -Epsilon && Lambda <= 1.0f + Epsilon) && (Gamma >= -Epsilon && Gamma <= 1.0f + Epsilon))
 	{
+		// Snap undershoots to endpoints to prevent microscopic ghost segments.
+		// We do NOT snap overshoots (Lambda < 0 or Lambda > 1) because those are needed for proper extension.
+		
+		if (Lambda > 0.0f && Lambda < Epsilon)
+		{
+			Lambda = 0.0f;
+		}
+		else if (Lambda < 1.0f && Lambda > 1.0f - Epsilon)
+		{
+			Lambda = 1.0f;
+		}
+
 		OutIntersection = A1 + Lambda * (B1 - A1);
 		return true;
 	}
