@@ -183,11 +183,73 @@ void URTPlanTrimTool::PerformMarqueeTrim()
 		const FRTVertex* V2 = Data.Vertices.Find(Wall->VertexBId);
 		if (!V1 || !V2) continue;
 
-		FVector2D Intersection;
-		if (FRTPlanGeometryUtils::SegmentIntersection(FenceStart, FenceEnd, V1->Position, V2->Position, Intersection))
+		if (Wall->bIsArc)
 		{
-			TrimWallAtPoint(WallId, Intersection);
-			bAnyTrim = true;
+			// Handle arc wall intersection with fence line
+			FVector2D ArcCenter = Wall->ArcCenter;
+			float Radius = FVector2D::Distance(ArcCenter, V1->Position);
+			
+			// Find line-circle intersections
+			FVector2D D = FenceEnd - FenceStart;
+			FVector2D F = FenceStart - ArcCenter;
+			
+			float a = D | D;
+			float b = 2.0f * (F | D);
+			float c = (F | F) - Radius * Radius;
+			
+			float Discriminant = b * b - 4.0f * a * c;
+			
+			if (Discriminant >= 0 && a > KINDA_SMALL_NUMBER)
+			{
+				float SqrtDisc = FMath::Sqrt(Discriminant);
+				float T1 = (-b - SqrtDisc) / (2.0f * a);
+				float T2 = (-b + SqrtDisc) / (2.0f * a);
+				
+				for (float T : { T1, T2 })
+				{
+					if (T >= 0.0f && T <= 1.0f)
+					{
+						FVector2D Intersection = FenceStart + D * T;
+						
+						// Check if intersection is within arc sweep
+						FVector2D ToIntersect = Intersection - ArcCenter;
+						float IntersectAngle = FMath::Atan2(ToIntersect.Y, ToIntersect.X);
+						
+						FVector2D ToStart = V1->Position - ArcCenter;
+						float StartAngle = FMath::Atan2(ToStart.Y, ToStart.X);
+						
+						float AngleDiff = IntersectAngle - StartAngle;
+						float SweepRad = FMath::DegreesToRadians(Wall->ArcSweepAngle);
+						
+						if (SweepRad > 0)
+						{
+							while (AngleDiff < 0) AngleDiff += 2.0f * PI;
+							while (AngleDiff > 2.0f * PI) AngleDiff -= 2.0f * PI;
+						}
+						else
+						{
+							while (AngleDiff > 0) AngleDiff -= 2.0f * PI;
+							while (AngleDiff < -2.0f * PI) AngleDiff += 2.0f * PI;
+						}
+						
+						float ArcT = AngleDiff / SweepRad;
+						if (ArcT >= 0.0f && ArcT <= 1.0f)
+						{
+							TrimArcWallAtPoint(WallId, Intersection);
+							bAnyTrim = true;
+						}
+					}
+				}
+			}
+		}
+		else
+		{
+			FVector2D Intersection;
+			if (FRTPlanGeometryUtils::SegmentIntersection(FenceStart, FenceEnd, V1->Position, V2->Position, Intersection))
+			{
+				TrimWallAtPoint(WallId, Intersection);
+				bAnyTrim = true;
+			}
 		}
 	}
 
