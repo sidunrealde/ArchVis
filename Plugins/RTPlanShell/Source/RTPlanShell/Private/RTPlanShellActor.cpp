@@ -188,7 +188,13 @@ void ARTPlanShellActor::RebuildAll()
 				Wall.HeightCm,
 				Wall.BaseZCm,
 				NumSegments,
-				0, 0, 0  // Material IDs
+				Wall.bHasLeftSkirting ? Wall.LeftSkirtingHeightCm : 0.0f,
+				Wall.bHasLeftSkirting ? Wall.LeftSkirtingThicknessCm : 0.0f,
+				Wall.bHasRightSkirting ? Wall.RightSkirtingHeightCm : 0.0f,
+				Wall.bHasRightSkirting ? Wall.RightSkirtingThicknessCm : 0.0f,
+				Wall.bHasCapSkirting ? Wall.CapSkirtingHeightCm : 0.0f,
+				Wall.bHasCapSkirting ? Wall.CapSkirtingThicknessCm : 0.0f,
+				0, 1, 2, 3, 4, 5  // Material IDs: Left, Right, Caps, SkirtLeft, SkirtRight, SkirtCap
 			);
 			
 			// Apply selection highlight
@@ -240,11 +246,11 @@ void ARTPlanShellActor::RebuildAll()
 
 				float MidDist = (SegStart + SegEnd) * 0.5f;
 				
-				FVector2D SegCenter2D = A + Dir * MidDist;
-				FVector SegCenter(SegCenter2D.X, SegCenter2D.Y, ZCenter);
+				FVector2D SegStartPos2D = A + Dir * SegStart;
+				FVector SegStartPos(SegStartPos2D.X, SegStartPos2D.Y, 0); // Z is handled by BaseZ param
 
 				FTransform SegTransform;
-				SegTransform.SetLocation(SegCenter);
+				SegTransform.SetLocation(SegStartPos);
 				SegTransform.SetRotation(WallRotation);
 
 				FRTPlanMeshBuilder::AppendWallMesh(
@@ -253,64 +259,28 @@ void ARTPlanShellActor::RebuildAll()
 					SegLength,
 					Wall.ThicknessCm,
 					Wall.HeightCm,
-					0, 0, 0
+					Wall.BaseZCm,
+					Wall.bHasLeftSkirting ? Wall.LeftSkirtingHeightCm : 0.0f,
+					Wall.bHasLeftSkirting ? Wall.LeftSkirtingThicknessCm : 0.0f,
+					Wall.bHasRightSkirting ? Wall.RightSkirtingHeightCm : 0.0f,
+					Wall.bHasRightSkirting ? Wall.RightSkirtingThicknessCm : 0.0f,
+					Wall.bHasCapSkirting ? Wall.CapSkirtingHeightCm : 0.0f,
+					Wall.bHasCapSkirting ? Wall.CapSkirtingThicknessCm : 0.0f,
+					0, 1, 2, 3, 4, 5
 				);
-
-				// Skirting for wall segments with openings
-				if (Wall.bHasLeftSkirting)
-				{
-					float OffsetY = (Wall.ThicknessCm * 0.5f) + (Wall.LeftSkirtingThicknessCm * 0.5f);
-					float SkirtingZCenter = Wall.BaseZCm + (Wall.LeftSkirtingHeightCm * 0.5f);
-					
-					FVector SkirtingCenter = SegCenter + WallRotation.RotateVector(FVector(0, OffsetY, SkirtingZCenter - ZCenter));
-					
-					FTransform SkirtingTransform;
-					SkirtingTransform.SetLocation(SkirtingCenter);
-					SkirtingTransform.SetRotation(WallRotation);
-
-					FRTPlanMeshBuilder::AppendWallMesh(
-						Mesh,
-						SkirtingTransform,
-						SegLength,
-						Wall.LeftSkirtingThicknessCm,
-						Wall.LeftSkirtingHeightCm,
-						0, 0, 0
-					);
-				}
-
-				if (Wall.bHasRightSkirting)
-				{
-					float OffsetY = -((Wall.ThicknessCm * 0.5f) + (Wall.RightSkirtingThicknessCm * 0.5f));
-					float SkirtingZCenter = Wall.BaseZCm + (Wall.RightSkirtingHeightCm * 0.5f);
-					
-					FVector SkirtingCenter = SegCenter + WallRotation.RotateVector(FVector(0, OffsetY, SkirtingZCenter - ZCenter));
-					
-					FTransform SkirtingTransform;
-					SkirtingTransform.SetLocation(SkirtingCenter);
-					SkirtingTransform.SetRotation(WallRotation);
-
-					FRTPlanMeshBuilder::AppendWallMesh(
-						Mesh,
-						SkirtingTransform,
-						SegLength,
-						Wall.RightSkirtingThicknessCm,
-						Wall.RightSkirtingHeightCm,
-						0, 0, 0
-					);
-				}
 			}
 		}
 		else
 		{
 			// Full Wall (No Openings)
-			FVector2D Mid = (ExtendedA + ExtendedB) * 0.5f;
+			// Transform at Start (ExtendedA)
 			
 			FTransform WallTransform;
-			WallTransform.SetLocation(FVector(Mid.X, Mid.Y, ZCenter));
+			WallTransform.SetLocation(FVector(ExtendedA.X, ExtendedA.Y, 0));
 			WallTransform.SetRotation(WallRotation);
 
-			UE_LOG(LogRTPlanShell, Verbose, TEXT("Building Wall: Mid=(%s), ZCenter=%f, Height=%f, ExtendedLength=%f"), 
-				*Mid.ToString(), ZCenter, Wall.HeightCm, ExtendedLength);
+			UE_LOG(LogRTPlanShell, Verbose, TEXT("Building Wall: Start=(%s), Height=%f, ExtendedLength=%f"), 
+				*ExtendedA.ToString(), Wall.HeightCm, ExtendedLength);
 
 			FRTPlanMeshBuilder::AppendWallMesh(
 				Mesh,
@@ -318,51 +288,15 @@ void ARTPlanShellActor::RebuildAll()
 				ExtendedLength,
 				Wall.ThicknessCm,
 				Wall.HeightCm,
-				0, 0, 0
+				Wall.BaseZCm,
+				Wall.bHasLeftSkirting ? Wall.LeftSkirtingHeightCm : 0.0f,
+				Wall.bHasLeftSkirting ? Wall.LeftSkirtingThicknessCm : 0.0f,
+				Wall.bHasRightSkirting ? Wall.RightSkirtingHeightCm : 0.0f,
+				Wall.bHasRightSkirting ? Wall.RightSkirtingThicknessCm : 0.0f,
+				Wall.bHasCapSkirting ? Wall.CapSkirtingHeightCm : 0.0f,
+				Wall.bHasCapSkirting ? Wall.CapSkirtingThicknessCm : 0.0f,
+				0, 1, 2, 3, 4, 5
 			);
-
-			// Skirting for full walls
-			if (Wall.bHasLeftSkirting)
-			{
-				float OffsetY = (Wall.ThicknessCm * 0.5f) + (Wall.LeftSkirtingThicknessCm * 0.5f);
-				float SkirtingZCenter = Wall.BaseZCm + (Wall.LeftSkirtingHeightCm * 0.5f);
-				
-				FVector SkirtingCenter = WallTransform.GetLocation() + WallRotation.RotateVector(FVector(0, OffsetY, SkirtingZCenter - ZCenter));
-				
-				FTransform SkirtingTransform;
-				SkirtingTransform.SetLocation(SkirtingCenter);
-				SkirtingTransform.SetRotation(WallRotation);
-
-				FRTPlanMeshBuilder::AppendWallMesh(
-					Mesh,
-					SkirtingTransform,
-					ExtendedLength,
-					Wall.LeftSkirtingThicknessCm,
-					Wall.LeftSkirtingHeightCm,
-					0, 0, 0
-				);
-			}
-
-			if (Wall.bHasRightSkirting)
-			{
-				float OffsetY = -((Wall.ThicknessCm * 0.5f) + (Wall.RightSkirtingThicknessCm * 0.5f));
-				float SkirtingZCenter = Wall.BaseZCm + (Wall.RightSkirtingHeightCm * 0.5f);
-				
-				FVector SkirtingCenter = WallTransform.GetLocation() + WallRotation.RotateVector(FVector(0, OffsetY, SkirtingZCenter - ZCenter));
-				
-				FTransform SkirtingTransform;
-				SkirtingTransform.SetLocation(SkirtingCenter);
-				SkirtingTransform.SetRotation(WallRotation);
-
-				FRTPlanMeshBuilder::AppendWallMesh(
-					Mesh,
-					SkirtingTransform,
-					ExtendedLength,
-					Wall.RightSkirtingThicknessCm,
-					Wall.RightSkirtingHeightCm,
-					0, 0, 0
-				);
-			}
 		}
 
 		// Apply selection highlight if this wall is selected

@@ -96,7 +96,7 @@ struct RTPLANCORE_API FRTWall
 	// --- Skirting (Baseboard) Settings ---
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere)
-	bool bHasLeftSkirting = false;
+	bool bHasLeftSkirting = true;
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere)
 	float LeftSkirtingHeightCm = 10.0f;
@@ -105,13 +105,22 @@ struct RTPLANCORE_API FRTWall
 	float LeftSkirtingThicknessCm = 1.5f;
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere)
-	bool bHasRightSkirting = false;
+	bool bHasRightSkirting = true;
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere)
 	float RightSkirtingHeightCm = 10.0f;
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere)
 	float RightSkirtingThicknessCm = 1.5f;
+
+	UPROPERTY(BlueprintReadWrite, EditAnywhere)
+	bool bHasCapSkirting = true;
+
+	UPROPERTY(BlueprintReadWrite, EditAnywhere)
+	float CapSkirtingHeightCm = 10.0f;
+
+	UPROPERTY(BlueprintReadWrite, EditAnywhere)
+	float CapSkirtingThicknessCm = 1.5f;
 
 	// Material/Finish IDs (referencing Catalog)
 	UPROPERTY(BlueprintReadWrite, EditAnywhere)
@@ -122,6 +131,15 @@ struct RTPLANCORE_API FRTWall
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere)
 	FName FinishCapsId;
+
+	UPROPERTY(BlueprintReadWrite, EditAnywhere)
+	FName FinishLeftSkirtingId;
+
+	UPROPERTY(BlueprintReadWrite, EditAnywhere)
+	FName FinishRightSkirtingId;
+
+	UPROPERTY(BlueprintReadWrite, EditAnywhere)
+	FName FinishCapSkirtingId;
 };
 
 /**

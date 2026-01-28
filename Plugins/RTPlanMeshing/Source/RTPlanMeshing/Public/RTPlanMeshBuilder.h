@@ -14,19 +14,29 @@ class UDynamicMesh;
 class RTPLANMESHING_API FRTPlanMeshBuilder
 {
 public:
-	// Generate a simple box mesh for a wall
+	// Generate a wall mesh with skirting and different materials
 	static void AppendWallMesh(
 		UDynamicMesh* TargetMesh,
 		const FTransform& Transform,
 		float Length,
 		float Thickness,
 		float Height,
+		float BaseZ,
+		float SkirtingHeight_Left,
+		float SkirtingThickness_Left,
+		float SkirtingHeight_Right,
+		float SkirtingThickness_Right,
+		float SkirtingHeight_Cap,
+		float SkirtingThickness_Cap,
 		int32 MaterialID_Left,
 		int32 MaterialID_Right,
-		int32 MaterialID_Caps
+		int32 MaterialID_Caps,
+		int32 MaterialID_Skirting_Left,
+		int32 MaterialID_Skirting_Right,
+		int32 MaterialID_Skirting_Cap
 	);
 
-	// Generate a curved wall mesh (arc wall)
+	// Generate a curved wall mesh (arc wall) with skirting
 	static void AppendCurvedWallMesh(
 		UDynamicMesh* TargetMesh,
 		const FVector2D& StartPoint,
@@ -37,9 +47,18 @@ public:
 		float Height,
 		float BaseZ,
 		int32 NumSegments,
+		float SkirtingHeight_Left,
+		float SkirtingThickness_Left,
+		float SkirtingHeight_Right,
+		float SkirtingThickness_Right,
+		float SkirtingHeight_Cap,
+		float SkirtingThickness_Cap,
 		int32 MaterialID_Left,
 		int32 MaterialID_Right,
-		int32 MaterialID_Caps
+		int32 MaterialID_Caps,
+		int32 MaterialID_Skirting_Left,
+		int32 MaterialID_Skirting_Right,
+		int32 MaterialID_Skirting_Cap
 	);
 
 	// Generate a floor mesh from a polygon loop
