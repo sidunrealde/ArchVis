@@ -41,6 +41,17 @@ enum class EArchVisInteractionMode : uint8
 };
 
 /**
+ * Current 2D Drafting Mode (Wall, Floor, Ceiling).
+ */
+UENUM(BlueprintType)
+enum class EDraftingMode : uint8
+{
+	Wall,
+	Floor,
+	Ceiling
+};
+
+/**
  * Current 2D tool mode.
  */
 UENUM(BlueprintType)
@@ -48,10 +59,21 @@ enum class EArchVis2DToolMode : uint8
 {
 	None,
 	Selection,
+	// Wall Tools
 	LineTool,
 	PolylineTool,
 	ArcTool,
-	TrimTool
+	TrimTool,
+	// Floor Tools
+	DrawFloor,
+	NewFloorArea,
+	ExtrudeFloor,
+	ExtendFloorArea,
+	EditExtrude,
+	// Ceiling Tools
+	DrawCeiling,
+	CreateFalseCeiling,
+	EditFalseCeiling
 };
 
 /**
@@ -90,6 +112,12 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "ArchVis|Input")
 	EArchVisInteractionMode GetInteractionMode() const { return CurrentInteractionMode; }
+
+	UFUNCTION(BlueprintCallable, Category = "ArchVis|Input")
+	void SetDraftingMode(EDraftingMode NewMode);
+
+	UFUNCTION(BlueprintCallable, Category = "ArchVis|Input")
+	EDraftingMode GetDraftingMode() const { return CurrentDraftingMode; }
 
 	UFUNCTION(BlueprintCallable, Category = "ArchVis|Input")
 	void OnToolChanged(ERTPlanToolType NewToolType);
@@ -206,6 +234,11 @@ protected:
 	void OnModifierAltStarted(const FInputActionValue& Value);
 	void OnModifierAltCompleted(const FInputActionValue& Value);
 
+	// --- Mode Switching Handlers ---
+	void OnModeWall(const FInputActionValue& Value);
+	void OnModeFloor(const FInputActionValue& Value);
+	void OnModeCeiling(const FInputActionValue& Value);
+
 	// --- Selection Input Handlers ---
 	void OnSelectStarted(const FInputActionValue& Value);
 	void OnSelectCompleted(const FInputActionValue& Value);
@@ -267,6 +300,18 @@ protected:
 	void OnToolPolylineHotkey(const FInputActionValue& Value);
 	void OnToolArcHotkey(const FInputActionValue& Value);
 	void OnToolTrimHotkey(const FInputActionValue& Value);
+
+	// Floor Tool Handlers
+	void OnToolDrawFloor(const FInputActionValue& Value);
+	void OnToolNewFloorArea(const FInputActionValue& Value);
+	void OnToolExtrudeFloor(const FInputActionValue& Value);
+	void OnToolExtendFloorArea(const FInputActionValue& Value);
+	void OnToolEditExtrude(const FInputActionValue& Value);
+
+	// Ceiling Tool Handlers
+	void OnToolDrawCeiling(const FInputActionValue& Value);
+	void OnToolCreateFalseCeiling(const FInputActionValue& Value);
+	void OnToolEditFalseCeiling(const FInputActionValue& Value);
 
 	// --- Console Commands ---
 	UFUNCTION(Exec)
@@ -338,6 +383,7 @@ protected:
 
 	// Current states
 	EArchVisInteractionMode CurrentInteractionMode = EArchVisInteractionMode::Drafting2D;
+	EDraftingMode CurrentDraftingMode = EDraftingMode::Wall;
 	EArchVis2DToolMode Current2DToolMode = EArchVis2DToolMode::Selection;
 	ERTPlanToolType CurrentToolType = ERTPlanToolType::None;
 	bool bNumericEntryContextActive = false;
@@ -354,6 +400,9 @@ protected:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UInputMappingContext> ActiveModeBaseIMC;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UInputMappingContext> ActiveDraftingModeIMC;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Input")
 	TObjectPtr<UToolInputComponent> ToolInput;

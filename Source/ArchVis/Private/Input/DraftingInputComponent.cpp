@@ -72,8 +72,8 @@ void UDraftingInputComponent::AddInputMappingContexts()
 		return;
 	}
 
-	// Add 2D base context
-	AddMappingContext(InputConfig->IMC_2D_Base, IMC_Priority_ModeBase);
+	// Add 2D base context (now called IMC_Drafting_Navigation)
+	AddMappingContext(InputConfig->IMC_Drafting_Navigation, IMC_Priority_ModeBase);
 
 	if (bDebugEnabled)
 	{
@@ -88,7 +88,7 @@ void UDraftingInputComponent::RemoveInputMappingContexts()
 		return;
 	}
 
-	RemoveMappingContext(InputConfig->IMC_2D_Base);
+	RemoveMappingContext(InputConfig->IMC_Drafting_Navigation);
 
 	if (bDebugEnabled)
 	{
@@ -187,4 +187,3 @@ AArchVisDraftingPawn* UDraftingInputComponent::GetDraftingPawn() const
 {
 	return GetOwningPawn<AArchVisDraftingPawn>();
 }
-
