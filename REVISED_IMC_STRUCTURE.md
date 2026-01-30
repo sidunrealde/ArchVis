@@ -91,10 +91,7 @@ Here is the detailed breakdown of the new IMCs. **This is the guide for restruct
     *   `IA_Look` (Mouse XY + Chord: `IA_FlyMode`)
     *   `IA_DollyZoom` (Mouse Wheel Axis + Chord: `IA_FlyMode` + Chord: `IA_ModifierAlt`)
     *   `IA_AdjustFlySpeed` (Mouse Wheel Axis + Chord: `IA_FlyMode`)
-    *   `IA_ViewTop` (Num 7)
-    *   `IA_ViewRight` (Num 3)
-    *   `IA_ViewFront` (Num 1)
-    *   `IA_ViewPerspective` (Num 5)
+
 
 ---
 

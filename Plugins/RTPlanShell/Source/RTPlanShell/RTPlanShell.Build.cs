@@ -15,7 +15,8 @@ public class RTPlanShell : ModuleRules
 				"RTPlanCore",
 				"RTPlanMeshing",
 				"RTPlanMath",
-				"RTPlanOpenings", // Added dependency
+				"RTPlanOpenings",
+				"RTPlanCatalog", // For finish catalog
 				"GeometryFramework",
 				"GeometryScriptingCore"
 			}

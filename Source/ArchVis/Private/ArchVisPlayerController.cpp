@@ -14,6 +14,11 @@
 #include "Tools/RTPlanArcTool.h"
 #include "Tools/RTPlanSelectTool.h"
 #include "RTPlanShellActor.h"
+#include "RTPlanSubsystem.h"
+#include "Blueprint/UserWidget.h"
+// Wall Properties Widget
+#include "RTPlanWallPropertiesWidget.h"
+#include "RTPlanFinishCatalog.h"
 #include "Kismet/GameplayStatics.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
@@ -137,6 +142,20 @@ void AArchVisPlayerController::OnGameModeReady()
 	AArchVisGameMode* GM = Cast<AArchVisGameMode>(UGameplayStatics::GetGameMode(this));
 	if (!GM) return;
 
+	// Register Document and ToolManager with the subsystem for global access
+	if (URTPlanSubsystem* Subsystem = URTPlanSubsystem::Get(this))
+	{
+		if (GM->GetDocument())
+		{
+			Subsystem->SetDocument(GM->GetDocument());
+		}
+		if (GM->GetToolManager())
+		{
+			Subsystem->SetToolManager(GM->GetToolManager());
+		}
+		UE_LOG(LogArchVisPC, Log, TEXT("Registered Document and ToolManager with RTPlanSubsystem"));
+	}
+
 	// Set up selection system now that ToolManager and ShellActor exist
 	if (URTPlanToolManager* ToolMgr = GM->GetToolManager())
 	{
@@ -149,6 +168,9 @@ void AArchVisPlayerController::OnGameModeReady()
 			SelectTool->OnSelectionChanged.AddDynamic(this, &AArchVisPlayerController::HandleSelectionChanged);
 		}
 	}
+
+	// Set up the wall properties widget
+	SetupWallPropertiesWidget();
 }
 
 void AArchVisPlayerController::SetupInputComponent()
@@ -2325,3 +2347,90 @@ void AArchVisPlayerController::ArchVisToggleSelectionDebug()
 {
 	SetSelectionDebugEnabled(!bSelectionDebugEnabled);
 }
+
+void AArchVisPlayerController::SetupWallPropertiesWidget()
+{
+	AArchVisGameMode* GM = Cast<AArchVisGameMode>(UGameplayStatics::GetGameMode(this));
+	if (!GM)
+	{
+		UE_LOG(LogArchVisPC, Warning, TEXT("SetupWallPropertiesWidget: GameMode not found"));
+		return;
+	}
+
+	URTPlanDocument* Document = GM->GetDocument();
+	URTPlanToolManager* ToolManager = GM->GetToolManager();
+	ARTPlanShellActor* ShellActor = GM->GetShellActor();
+
+	// Load finish catalog
+	if (!FinishCatalogAsset.IsNull())
+	{
+		FinishCatalog = FinishCatalogAsset.LoadSynchronous();
+		if (FinishCatalog)
+		{
+			UE_LOG(LogArchVisPC, Log, TEXT("Loaded FinishCatalog: %s"), *FinishCatalog->GetName());
+		}
+		else
+		{
+			UE_LOG(LogArchVisPC, Warning, TEXT("Failed to load FinishCatalog from asset reference"));
+		}
+	}
+	else
+	{
+		UE_LOG(LogArchVisPC, Warning, TEXT("FinishCatalogAsset is not set. Assign DA_WallFinishes in Blueprint."));
+	}
+
+	// Create the wall properties widget
+	if (WallPropertiesWidgetClass)
+	{
+		WallPropertiesWidget = CreateWidget<URTPlanWallPropertiesWidget>(this, WallPropertiesWidgetClass);
+		if (WallPropertiesWidget)
+		{
+			// Get the select tool
+			URTPlanSelectTool* SelectTool = ToolManager ? ToolManager->GetSelectTool() : nullptr;
+
+			// Setup context (connect to document and select tool)
+			if (Document && SelectTool)
+			{
+				WallPropertiesWidget->SetupContext(Document, SelectTool);
+				UE_LOG(LogArchVisPC, Log, TEXT("WallPropertiesWidget context set up"));
+			}
+			else
+			{
+				UE_LOG(LogArchVisPC, Warning, TEXT("Cannot setup widget context: Document=%s, SelectTool=%s"),
+					Document ? TEXT("OK") : TEXT("NULL"),
+					SelectTool ? TEXT("OK") : TEXT("NULL"));
+			}
+
+			// Load materials from catalog
+			if (FinishCatalog)
+			{
+				WallPropertiesWidget->LoadMaterialsFromCatalog(FinishCatalog);
+				UE_LOG(LogArchVisPC, Log, TEXT("Loaded materials from catalog into widget"));
+			}
+
+			// Add to viewport (Z-order 10 so it's above other UI)
+			WallPropertiesWidget->AddToViewport(10);
+
+			// Start hidden (will show when a wall is selected)
+			WallPropertiesWidget->HidePanel();
+
+			UE_LOG(LogArchVisPC, Log, TEXT("WallPropertiesWidget created and added to viewport"));
+		}
+		else
+		{
+			UE_LOG(LogArchVisPC, Error, TEXT("Failed to create WallPropertiesWidget"));
+		}
+	}
+	else
+	{
+		UE_LOG(LogArchVisPC, Warning, TEXT("WallPropertiesWidgetClass is not set. Assign WBP_WallProperties in Blueprint."));
+	}
+
+	// Set finish catalog on shell actor for material lookups
+	if (ShellActor && FinishCatalog)
+	{
+		ShellActor->SetFinishCatalog(FinishCatalog);
+		UE_LOG(LogArchVisPC, Log, TEXT("FinishCatalog set on ShellActor"));
+	}
+}
+

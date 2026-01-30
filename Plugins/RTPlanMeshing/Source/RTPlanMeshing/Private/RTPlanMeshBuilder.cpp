@@ -63,10 +63,15 @@ void FRTPlanMeshBuilder::AppendWallMesh(
 	float SkirtingThickness_Cap,
 	int32 MaterialID_Left,
 	int32 MaterialID_Right,
-	int32 MaterialID_Caps,
-	int32 MaterialID_Skirting_Left,
-	int32 MaterialID_Skirting_Right,
-	int32 MaterialID_Skirting_Cap
+	int32 MaterialID_Top,
+	int32 MaterialID_LeftCap,
+	int32 MaterialID_RightCap,
+	int32 MaterialID_SkirtingLeft,
+	int32 MaterialID_SkirtingLeftTop,
+	int32 MaterialID_SkirtingLeftCap,
+	int32 MaterialID_SkirtingRight,
+	int32 MaterialID_SkirtingRightTop,
+	int32 MaterialID_SkirtingRightCap
 )
 {
 	if (!TargetMesh || Length <= 0 || Thickness <= 0 || Height <= 0) return;
@@ -76,6 +81,12 @@ void FRTPlanMeshBuilder::AppendWallMesh(
 		if (!Mesh.HasAttributes())
 		{
 			Mesh.EnableAttributes();
+		}
+		
+		// Enable triangle groups so material IDs are properly used
+		if (!Mesh.HasTriangleGroups())
+		{
+			Mesh.EnableTriangleGroups();
 		}
 
 		float HalfThickness = Thickness * 0.5f;
@@ -127,7 +138,7 @@ void FRTPlanMeshBuilder::AppendWallMesh(
 			AddQuad(Mesh, P_RS_Out, P_RS_Top, P_RS_Top_End, P_RS_Out_End,
 				FVector2f(0, 0), FVector2f(0, SkirtingHeight_Right * UVScale),
 				FVector2f(Length * UVScale, SkirtingHeight_Right * UVScale), FVector2f(Length * UVScale, 0),
-				FVector3f(0, -1, 0), MaterialID_Skirting_Right);
+				FVector3f(0, -1, 0), MaterialID_SkirtingRight);
 			
 			// Right Skirting Top
 			// Connects Skirting Top Outer Edge to Wall Surface at Skirting Height
@@ -141,7 +152,7 @@ void FRTPlanMeshBuilder::AppendWallMesh(
 			AddQuad(Mesh, P_RS_Top, P_RW_SkirtTop_Start, P_RW_SkirtTop_End, P_RS_Top_End,
 				FVector2f(0, 0), FVector2f(0, SkirtingThickness_Right * UVScale),
 				FVector2f(Length * UVScale, SkirtingThickness_Right * UVScale), FVector2f(Length * UVScale, 0),
-				FVector3f(0, 0, 1), MaterialID_Skirting_Right);
+				FVector3f(0, 0, 1), MaterialID_SkirtingRightTop);
 		}
 		if (SkirtingHeight_Left > 0 && SkirtingThickness_Left > 0)
 		{
@@ -150,7 +161,7 @@ void FRTPlanMeshBuilder::AppendWallMesh(
 			AddQuad(Mesh, P_LS_Out_End, P_LS_Top_End, P_LS_Top, P_LS_Out,
 				FVector2f(Length * UVScale, 0), FVector2f(Length * UVScale, SkirtingHeight_Left * UVScale),
 				FVector2f(0, SkirtingHeight_Left * UVScale), FVector2f(0, 0),
-				FVector3f(0, 1, 0), MaterialID_Skirting_Left);
+				FVector3f(0, 1, 0), MaterialID_SkirtingLeft);
 			
 			// Left Skirting Top
 			// Connects Skirting Top Outer Edge to Wall Surface at Skirting Height
@@ -164,7 +175,7 @@ void FRTPlanMeshBuilder::AppendWallMesh(
 			AddQuad(Mesh, P_LS_Top, P_LS_Top_End, P_LW_SkirtTop_End, P_LW_SkirtTop_Start,
 				FVector2f(0, 0), FVector2f(Length * UVScale, 0),
 				FVector2f(Length * UVScale, SkirtingThickness_Left * UVScale), FVector2f(0, SkirtingThickness_Left * UVScale),
-				FVector3f(0, 0, 1), MaterialID_Skirting_Left);
+				FVector3f(0, 0, 1), MaterialID_SkirtingLeftTop);
 		}
 
 		// --- Caps and Bottom/Top Faces ---
@@ -174,33 +185,35 @@ void FRTPlanMeshBuilder::AppendWallMesh(
 		AddQuad(Mesh, P_RT, P_LT, P_LT_End, P_RT_End,
 			FVector2f(0, 0), FVector2f(0, Thickness * UVScale),
 			FVector2f(Length * UVScale, Thickness * UVScale), FVector2f(Length * UVScale, 0),
-			FVector3f(0, 0, 1), MaterialID_Caps);
+			FVector3f(0, 0, 1), MaterialID_Top);
 		
 		// Bottom Cap (might be covered by floor, but good to have)
 		// This is now more complex due to skirting. We build it from 3 parts.
-		// Keeping these as is for now, assuming bottom is not visible or winding is less critical
-		AddQuad(Mesh, P_RS_Out_End, P_RB_End, P_RB, P_RS_Out, FVector2f(), FVector2f(), FVector2f(), FVector2f(), FVector3f(0, 0, -1), MaterialID_Caps);
-		AddQuad(Mesh, P_LB_End, P_LS_Out_End, P_LS_Out, P_LB, FVector2f(), FVector2f(), FVector2f(), FVector2f(), FVector3f(0, 0, -1), MaterialID_Caps);
-		AddQuad(Mesh, P_RB_End, P_LB_End, P_LB, P_RB, FVector2f(), FVector2f(), FVector2f(), FVector2f(), FVector3f(0, 0, -1), MaterialID_Caps);
+		// Use MaterialID_Top for bottom as well (usually not visible)
+		AddQuad(Mesh, P_RS_Out_End, P_RB_End, P_RB, P_RS_Out, FVector2f(), FVector2f(), FVector2f(), FVector2f(), FVector3f(0, 0, -1), MaterialID_Top);
+		AddQuad(Mesh, P_LB_End, P_LS_Out_End, P_LS_Out, P_LB, FVector2f(), FVector2f(), FVector2f(), FVector2f(), FVector3f(0, 0, -1), MaterialID_Top);
+		AddQuad(Mesh, P_RB_End, P_LB_End, P_LB, P_RB, FVector2f(), FVector2f(), FVector2f(), FVector2f(), FVector3f(0, 0, -1), MaterialID_Top);
 
 
-		// Start Cap
+		// Start Cap (facing -X, uses LeftCap for left side, RightCap for right side)
+		// Since start cap is a single quad spanning both left and right sides,
+		// we use LeftCap as the primary material for start cap
 		// Reversed winding
 		// UVs: U -> Thickness, V -> Height
 		AddQuad(Mesh, P_RB, P_LB, P_LT, P_RT, 
 			FVector2f(0, 0), FVector2f(Thickness * UVScale, 0), 
 			FVector2f(Thickness * UVScale, Height * UVScale), FVector2f(0, Height * UVScale), 
-			FVector3f(-1, 0, 0), MaterialID_Caps);
+			FVector3f(-1, 0, 0), MaterialID_LeftCap);
 		
-		if (SkirtingHeight_Right > 0) AddQuad(Mesh, P_RS_Out, P_RB, P_RS_Top, P_RS_Out, FVector2f(), FVector2f(), FVector2f(), FVector2f(), FVector3f(-1, 0, 0), MaterialID_Caps); // Triangulated quad? No, P_RS_Out twice?
+		if (SkirtingHeight_Right > 0) AddQuad(Mesh, P_RS_Out, P_RB, P_RS_Top, P_RS_Out, FVector2f(), FVector2f(), FVector2f(), FVector2f(), FVector3f(-1, 0, 0), MaterialID_SkirtingRightCap);
 		
-		// End Cap
+		// End Cap (facing +X, uses RightCap as the primary material)
 		// Reversed winding
 		// UVs: U -> Thickness, V -> Height
 		AddQuad(Mesh, P_RT_End, P_LT_End, P_LB_End, P_RB_End, 
 			FVector2f(0, Height * UVScale), FVector2f(Thickness * UVScale, Height * UVScale), 
 			FVector2f(Thickness * UVScale, 0), FVector2f(0, 0), 
-			FVector3f(1, 0, 0), MaterialID_Caps);
+			FVector3f(1, 0, 0), MaterialID_RightCap);
 		
 		// --- Cap Skirting ---
 		if (SkirtingHeight_Cap > 0 && SkirtingThickness_Cap > 0)
@@ -212,12 +225,12 @@ void FRTPlanMeshBuilder::AppendWallMesh(
 			FVector3d P_SC_Out_LT(-SkirtingThickness_Cap, HalfThickness, BaseZ + SkirtingHeight_Cap);
 			FVector3d P_SC_Out_LB(-SkirtingThickness_Cap, HalfThickness, BaseZ);
 
-			// Face
+			// Face - Start cap skirting uses LeftCap skirting material
 			// Reversed winding (LB, LT, RT, RB)
 			AddQuad(Mesh, P_SC_Out_LB, P_SC_Out_LT, P_SC_Out_RT, P_SC_Out_RB,
 				FVector2f(0, 0), FVector2f(0, SkirtingHeight_Cap * UVScale),
 				FVector2f(Thickness * UVScale, SkirtingHeight_Cap * UVScale), FVector2f(Thickness * UVScale, 0),
-				FVector3f(-1, 0, 0), MaterialID_Skirting_Cap);
+				FVector3f(-1, 0, 0), MaterialID_SkirtingLeftCap);
 			
 			// Top
 			// Connects Skirting Top Outer Edge to Wall Cap Surface at Skirting Height
@@ -231,7 +244,7 @@ void FRTPlanMeshBuilder::AppendWallMesh(
 			AddQuad(Mesh, P_SC_Out_RT, P_SC_Out_LT, P_SC_Wall_LT, P_SC_Wall_RT,
 				FVector2f(0, SkirtingThickness_Cap * UVScale), FVector2f(Thickness * UVScale, SkirtingThickness_Cap * UVScale),
 				FVector2f(Thickness * UVScale, 0), FVector2f(0, 0),
-				FVector3f(0, 0, 1), MaterialID_Skirting_Cap);
+				FVector3f(0, 0, 1), MaterialID_SkirtingLeftCap);
 
 			// Sides (connecting to Left/Right skirting if present, or wall)
 			// Left Side of Start Cap Skirting
@@ -242,7 +255,7 @@ void FRTPlanMeshBuilder::AppendWallMesh(
 				// Side face at Y=HalfThickness
 				AddQuad(Mesh, P_SC_Out_LT, P_SC_Out_LB, P_LB, P_LB, // Degenerate? No, P_LB is at X=0.
 					FVector2f(), FVector2f(), FVector2f(), FVector2f(),
-					FVector3f(0, 1, 0), MaterialID_Skirting_Cap);
+					FVector3f(0, 1, 0), MaterialID_SkirtingLeftCap);
 			}
 			else
 			{
@@ -254,7 +267,7 @@ void FRTPlanMeshBuilder::AppendWallMesh(
 				FVector3d P_LT_Cap(0, HalfThickness, BaseZ + SkirtingHeight_Cap);
 				AddQuad(Mesh, P_SC_Out_LT, P_SC_Out_LB, P_LB, P_LT_Cap,
 					FVector2f(), FVector2f(), FVector2f(), FVector2f(),
-					FVector3f(0, 1, 0), MaterialID_Skirting_Cap);
+					FVector3f(0, 1, 0), MaterialID_SkirtingLeftCap);
 			}
 			
 			// Right Side of Start Cap Skirting
@@ -262,7 +275,7 @@ void FRTPlanMeshBuilder::AppendWallMesh(
 				FVector3d P_RT_Cap(0, -HalfThickness, BaseZ + SkirtingHeight_Cap);
 				AddQuad(Mesh, P_SC_Out_RB, P_SC_Out_RT, P_RT_Cap, P_RB,
 					FVector2f(), FVector2f(), FVector2f(), FVector2f(),
-					FVector3f(0, -1, 0), MaterialID_Skirting_Cap);
+					FVector3f(0, -1, 0), MaterialID_SkirtingRightCap);
 			}
 
 
@@ -273,12 +286,12 @@ void FRTPlanMeshBuilder::AppendWallMesh(
 			FVector3d P_EC_Out_LT(Length + SkirtingThickness_Cap, HalfThickness, BaseZ + SkirtingHeight_Cap);
 			FVector3d P_EC_Out_LB(Length + SkirtingThickness_Cap, HalfThickness, BaseZ);
 
-			// Face
+			// Face - End cap skirting uses RightCap skirting material
 			// Reversed winding (RB, RT, LT, LB)
 			AddQuad(Mesh, P_EC_Out_RB, P_EC_Out_RT, P_EC_Out_LT, P_EC_Out_LB,
 				FVector2f(0, 0), FVector2f(0, SkirtingHeight_Cap * UVScale),
 				FVector2f(Thickness * UVScale, SkirtingHeight_Cap * UVScale), FVector2f(Thickness * UVScale, 0),
-				FVector3f(1, 0, 0), MaterialID_Skirting_Cap);
+				FVector3f(1, 0, 0), MaterialID_SkirtingRightCap);
 
 			// Top
 			// Connects Skirting Top Outer Edge to Wall Cap Surface at Skirting Height
@@ -292,7 +305,7 @@ void FRTPlanMeshBuilder::AppendWallMesh(
 			AddQuad(Mesh, P_EC_Out_LT, P_EC_Out_RT, P_EC_Wall_RT, P_EC_Wall_LT,
 				FVector2f(Thickness * UVScale, SkirtingThickness_Cap * UVScale), FVector2f(0, SkirtingThickness_Cap * UVScale),
 				FVector2f(0, 0), FVector2f(Thickness * UVScale, 0),
-				FVector3f(0, 0, 1), MaterialID_Skirting_Cap);
+				FVector3f(0, 0, 1), MaterialID_SkirtingRightCap);
 
 			// Sides
 			// Left Side of End Cap Skirting
@@ -300,14 +313,14 @@ void FRTPlanMeshBuilder::AppendWallMesh(
 				FVector3d P_LT_End_Cap(Length, HalfThickness, BaseZ + SkirtingHeight_Cap);
 				AddQuad(Mesh, P_EC_Out_LB, P_EC_Out_LT, P_LT_End_Cap, P_LB_End,
 					FVector2f(), FVector2f(), FVector2f(), FVector2f(),
-					FVector3f(0, 1, 0), MaterialID_Skirting_Cap);
+					FVector3f(0, 1, 0), MaterialID_SkirtingLeftCap);
 			}
 			// Right Side of End Cap Skirting
 			{
 				FVector3d P_RT_End_Cap(Length, -HalfThickness, BaseZ + SkirtingHeight_Cap);
 				AddQuad(Mesh, P_EC_Out_RT, P_EC_Out_RB, P_RB_End, P_RT_End_Cap,
 					FVector2f(), FVector2f(), FVector2f(), FVector2f(),
-					FVector3f(0, -1, 0), MaterialID_Skirting_Cap);
+					FVector3f(0, -1, 0), MaterialID_SkirtingRightCap);
 			}
 		}
 
@@ -335,10 +348,15 @@ void FRTPlanMeshBuilder::AppendCurvedWallMesh(
 	float SkirtingThickness_Cap,
 	int32 MaterialID_Left,
 	int32 MaterialID_Right,
-	int32 MaterialID_Caps,
-	int32 MaterialID_Skirting_Left,
-	int32 MaterialID_Skirting_Right,
-	int32 MaterialID_Skirting_Cap
+	int32 MaterialID_Top,
+	int32 MaterialID_LeftCap,
+	int32 MaterialID_RightCap,
+	int32 MaterialID_SkirtingLeft,
+	int32 MaterialID_SkirtingLeftTop,
+	int32 MaterialID_SkirtingLeftCap,
+	int32 MaterialID_SkirtingRight,
+	int32 MaterialID_SkirtingRightTop,
+	int32 MaterialID_SkirtingRightCap
 )
 {
 	if (!TargetMesh || FMath::Abs(SweepAngleDeg) < 0.1f) return;
@@ -367,6 +385,12 @@ void FRTPlanMeshBuilder::AppendCurvedWallMesh(
 	TargetMesh->EditMesh([&](FDynamicMesh3& Mesh)
 	{
 		if (!Mesh.HasAttributes()) Mesh.EnableAttributes();
+		
+		// Enable triangle groups so material IDs are properly used
+		if (!Mesh.HasTriangleGroups())
+		{
+			Mesh.EnableTriangleGroups();
+		}
 
 		for (int32 i = 0; i < NumSegments; ++i)
 		{
@@ -380,8 +404,10 @@ void FRTPlanMeshBuilder::AppendCurvedWallMesh(
 			// If Sweep < 0 (CW): Inner is Right, Outer is Left.
 			int32 InnerMat = SweepAngleDeg > 0 ? MaterialID_Left : MaterialID_Right;
 			int32 OuterMat = SweepAngleDeg > 0 ? MaterialID_Right : MaterialID_Left;
-			int32 SkirtInnerMat = SweepAngleDeg > 0 ? MaterialID_Skirting_Left : MaterialID_Skirting_Right;
-			int32 SkirtOuterMat = SweepAngleDeg > 0 ? MaterialID_Skirting_Right : MaterialID_Skirting_Left;
+			int32 SkirtInnerMat = SweepAngleDeg > 0 ? MaterialID_SkirtingLeft : MaterialID_SkirtingRight;
+			int32 SkirtOuterMat = SweepAngleDeg > 0 ? MaterialID_SkirtingRight : MaterialID_SkirtingLeft;
+			int32 SkirtInnerTopMat = SweepAngleDeg > 0 ? MaterialID_SkirtingLeftTop : MaterialID_SkirtingRightTop;
+			int32 SkirtOuterTopMat = SweepAngleDeg > 0 ? MaterialID_SkirtingRightTop : MaterialID_SkirtingLeftTop;
 			
 			float SkirtHInner = SweepAngleDeg > 0 ? SkirtingHeight_Left : SkirtingHeight_Right;
 			float SkirtHOuter = SweepAngleDeg > 0 ? SkirtingHeight_Right : SkirtingHeight_Left;
@@ -553,7 +579,7 @@ void FRTPlanMeshBuilder::AppendCurvedWallMesh(
 				AddQuad(Mesh, P_IRT0, P_IRT1, P_OLT1, P_OLT0, 
 					FVector2f(U0, 0), FVector2f(U1, 0), 
 					FVector2f(U1, Thickness * UVScale), FVector2f(U0, Thickness * UVScale), 
-					FVector3f(0,0,1), MaterialID_Caps);
+					FVector3f(0,0,1), MaterialID_Top);
 			}
 			else
 			{
@@ -562,7 +588,7 @@ void FRTPlanMeshBuilder::AppendCurvedWallMesh(
 				AddQuad(Mesh, P_IRT0, P_OLT0, P_OLT1, P_IRT1, 
 					FVector2f(U0, 0), FVector2f(U0, Thickness * UVScale), 
 					FVector2f(U1, Thickness * UVScale), FVector2f(U1, 0), 
-					FVector3f(0,0,1), MaterialID_Caps);
+					FVector3f(0,0,1), MaterialID_Top);
 			}
 			
 			// Start Cap (at i=0)
@@ -575,7 +601,7 @@ void FRTPlanMeshBuilder::AppendCurvedWallMesh(
 					AddQuad(Mesh, P_IRB0, P_IRT0, P_OLT0, P_OLB0, 
 						FVector2f(0, 0), FVector2f(0, Height * UVScale), 
 						FVector2f(Thickness * UVScale, Height * UVScale), FVector2f(Thickness * UVScale, 0), 
-						FVector3f(FMath::Sin(Angle0), -FMath::Cos(Angle0), 0), MaterialID_Caps);
+						FVector3f(FMath::Sin(Angle0), -FMath::Cos(Angle0), 0), MaterialID_LeftCap);
 						
 					// Inner Skirting Start Cap
 					if (SkirtHInner > 0)
@@ -609,7 +635,7 @@ void FRTPlanMeshBuilder::AppendCurvedWallMesh(
 					AddQuad(Mesh, P_OLB0, P_OLT0, P_IRT0, P_IRB0, 
 						FVector2f(0, 0), FVector2f(0, Height * UVScale), 
 						FVector2f(Thickness * UVScale, Height * UVScale), FVector2f(Thickness * UVScale, 0), 
-						FVector3f(-FMath::Sin(Angle0), FMath::Cos(Angle0), 0), MaterialID_Caps);
+						FVector3f(-FMath::Sin(Angle0), FMath::Cos(Angle0), 0), MaterialID_LeftCap);
 						
 					// Inner Skirting Start Cap (CW)
 					if (SkirtHInner > 0)
@@ -649,7 +675,7 @@ void FRTPlanMeshBuilder::AppendCurvedWallMesh(
 					AddQuad(Mesh, P_OLB1, P_OLT1, P_IRT1, P_IRB1, 
 						FVector2f(0, 0), FVector2f(0, Height * UVScale), 
 						FVector2f(Thickness * UVScale, Height * UVScale), FVector2f(Thickness * UVScale, 0), 
-						FVector3f(-FMath::Sin(Angle1), FMath::Cos(Angle1), 0), MaterialID_Caps);
+						FVector3f(-FMath::Sin(Angle1), FMath::Cos(Angle1), 0), MaterialID_RightCap);
 						
 					// Inner Skirting End Cap
 					if (SkirtHInner > 0)
@@ -683,7 +709,7 @@ void FRTPlanMeshBuilder::AppendCurvedWallMesh(
 					AddQuad(Mesh, P_IRB1, P_IRT1, P_OLT1, P_OLB1, 
 						FVector2f(0, 0), FVector2f(0, Height * UVScale), 
 						FVector2f(Thickness * UVScale, Height * UVScale), FVector2f(Thickness * UVScale, 0), 
-						FVector3f(FMath::Sin(Angle1), -FMath::Cos(Angle1), 0), MaterialID_Caps);
+						FVector3f(FMath::Sin(Angle1), -FMath::Cos(Angle1), 0), MaterialID_RightCap);
 						
 					// Inner Skirting End Cap (CW)
 					if (SkirtHInner > 0)

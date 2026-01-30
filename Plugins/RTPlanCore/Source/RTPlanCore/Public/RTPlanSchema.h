@@ -130,16 +130,33 @@ struct RTPLANCORE_API FRTWall
 	FName FinishRightId;
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere)
-	FName FinishCapsId;
+	FName FinishLeftCapId;
 
+	UPROPERTY(BlueprintReadWrite, EditAnywhere)
+	FName FinishRightCapId;
+
+	UPROPERTY(BlueprintReadWrite, EditAnywhere)
+	FName FinishTopId;
+
+	// --- Left Skirting Material/Finish IDs ---
 	UPROPERTY(BlueprintReadWrite, EditAnywhere)
 	FName FinishLeftSkirtingId;
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere)
+	FName FinishLeftSkirtingTopId;
+
+	UPROPERTY(BlueprintReadWrite, EditAnywhere)
+	FName FinishLeftSkirtingCapId;
+
+	// --- Right Skirting Material/Finish IDs ---
+	UPROPERTY(BlueprintReadWrite, EditAnywhere)
 	FName FinishRightSkirtingId;
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere)
-	FName FinishCapSkirtingId;
+	FName FinishRightSkirtingTopId;
+
+	UPROPERTY(BlueprintReadWrite, EditAnywhere)
+	FName FinishRightSkirtingCapId;
 };
 
 /**

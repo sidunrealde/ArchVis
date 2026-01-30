@@ -38,6 +38,29 @@ void UOrbitInputComponent::TickComponent(float DeltaTime, ELevelTick TickType, F
 	// Process mouse-based navigation
 	ProcessMouseNavigation(DeltaTime);
 
+	// Validate movement input against actual key state
+	// This prevents stuck movement when Enhanced Input events don't fire correctly
+	if (APlayerController* PC = GetPlayerController())
+	{
+		// Check if WASD keys are actually pressed
+		bool bWPressed = PC->IsInputKeyDown(EKeys::W);
+		bool bSPressed = PC->IsInputKeyDown(EKeys::S);
+		bool bAPressed = PC->IsInputKeyDown(EKeys::A);
+		bool bDPressed = PC->IsInputKeyDown(EKeys::D);
+		bool bQPressed = PC->IsInputKeyDown(EKeys::Q);
+		bool bEPressed = PC->IsInputKeyDown(EKeys::E);
+		
+		// If no movement keys are pressed, zero out input
+		if (!bWPressed && !bSPressed && !bAPressed && !bDPressed)
+		{
+			MoveInput = FVector2D::ZeroVector;
+		}
+		if (!bQPressed && !bEPressed)
+		{
+			VerticalInput = 0.0f;
+		}
+	}
+
 	// Process WASD movement during fly mode (RMB held)
 	ENavMode NavMode = GetCurrentNavMode();
 	if (AArchVisOrbitPawn* Pawn = GetOrbitPawn())
@@ -315,10 +338,15 @@ void UOrbitInputComponent::OnFlyModeActionStarted(const FInputActionValue& Value
 void UOrbitInputComponent::OnFlyModeActionCompleted(const FInputActionValue& Value)
 {
 	bFlyModeActive = false;
+	
+	// Reset movement input to prevent stuck movement when re-entering fly mode
+	MoveInput = FVector2D::ZeroVector;
+	VerticalInput = 0.0f;
+	
 	UpdateMouseLockState();
 
 	// Always log for debugging
-	UE_LOG(LogOrbitInput, Log, TEXT("IA_FlyMode: Completed - bFlyModeActive=%d"), bFlyModeActive);
+	UE_LOG(LogOrbitInput, Log, TEXT("IA_FlyMode: Completed - bFlyModeActive=%d, MoveInput reset"), bFlyModeActive);
 
 	// End fly/dolly mode
 	if (AArchVisOrbitPawn* Pawn = GetOrbitPawn())
@@ -490,17 +518,29 @@ void UOrbitInputComponent::OnMove(const FInputActionValue& Value)
 	//   RawInput.X = A/D (left/right)
 	//   RawInput.Y = W/S (forward/back)
 	const FVector2D RawInput = Value.Get<FVector2D>();
-	MoveInput = RawInput;  // Use directly - X=left/right, Y=forward/back
+	
+	if (bDebugEnabled)
+	{
+		UE_LOG(LogOrbitInput, Log, TEXT("OnMove: RawInput=%s"), *RawInput.ToString());
+	}
+	
+	// Store the input directly - Enhanced Input handles accumulation
+	// When chord is broken or all keys released, we'll get zero
+	MoveInput = RawInput;
 }
 
 void UOrbitInputComponent::OnMoveUp(const FInputActionValue& Value)
 {
-	VerticalInput = Value.Get<float>();
+	float InputValue = Value.Get<float>();
+	// Zero out on Completed (when chord is broken or key released)
+	VerticalInput = FMath::IsNearlyZero(InputValue, 0.01f) ? 0.0f : InputValue;
 }
 
 void UOrbitInputComponent::OnMoveDown(const FInputActionValue& Value)
 {
-	VerticalInput = -Value.Get<float>();
+	float InputValue = Value.Get<float>();
+	// Zero out on Completed (when chord is broken or key released)  
+	VerticalInput = FMath::IsNearlyZero(InputValue, 0.01f) ? 0.0f : -InputValue;
 }
 
 // --- Private Helpers ---

@@ -18,6 +18,8 @@ class UArchVisInputConfig;
 class UEnhancedInputLocalPlayerSubsystem;
 class UInputMappingContext;
 class UToolInputComponent;
+class URTPlanWallPropertiesWidget;
+class URTFinishCatalog;
 
 /**
  * How the snap/constraint modifier key behaves.
@@ -203,6 +205,24 @@ protected:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input")
 	ERTLengthUnit DefaultUnit = ERTLengthUnit::Centimeters;
+
+	// --- Wall Properties Widget ---
+	
+	/** Widget class for wall properties panel. Set in Blueprint. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI|WallProperties")
+	TSubclassOf<URTPlanWallPropertiesWidget> WallPropertiesWidgetClass;
+
+	/** Finish catalog asset containing wall materials. Set in Blueprint. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI|WallProperties")
+	TSoftObjectPtr<URTFinishCatalog> FinishCatalogAsset;
+
+	/** Get the wall properties widget instance */
+	UFUNCTION(BlueprintCallable, Category = "UI|WallProperties")
+	URTPlanWallPropertiesWidget* GetWallPropertiesWidget() const { return WallPropertiesWidget; }
+
+	/** Get the loaded finish catalog */
+	UFUNCTION(BlueprintCallable, Category = "UI|WallProperties")
+	URTFinishCatalog* GetFinishCatalog() const { return FinishCatalog; }
 
 	// --- Snap Settings ---
 	
@@ -412,4 +432,18 @@ protected:
 
 	UPROPERTY(EditAnywhere, Category = "ArchVis|Debug")
 	bool bSelectionDebugEnabled = false;
+
+private:
+	// --- Wall Properties Widget ---
+	
+	/** The wall properties widget instance */
+	UPROPERTY(Transient)
+	TObjectPtr<URTPlanWallPropertiesWidget> WallPropertiesWidget;
+
+	/** The loaded finish catalog */
+	UPROPERTY(Transient)
+	TObjectPtr<URTFinishCatalog> FinishCatalog;
+
+	/** Setup the wall properties widget (called from OnGameModeReady) */
+	void SetupWallPropertiesWidget();
 };
