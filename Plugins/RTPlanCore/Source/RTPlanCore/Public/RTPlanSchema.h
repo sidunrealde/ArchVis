@@ -113,14 +113,6 @@ struct RTPLANCORE_API FRTWall
 	UPROPERTY(BlueprintReadWrite, EditAnywhere)
 	float RightSkirtingThicknessCm = 1.5f;
 
-	UPROPERTY(BlueprintReadWrite, EditAnywhere)
-	bool bHasCapSkirting = true;
-
-	UPROPERTY(BlueprintReadWrite, EditAnywhere)
-	float CapSkirtingHeightCm = 10.0f;
-
-	UPROPERTY(BlueprintReadWrite, EditAnywhere)
-	float CapSkirtingThicknessCm = 1.5f;
 
 	// Material/Finish IDs (referencing Catalog)
 	UPROPERTY(BlueprintReadWrite, EditAnywhere)

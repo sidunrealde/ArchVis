@@ -37,22 +37,36 @@ Skirting (or baseboards) are generated at the bottom of the wall. "Left" and "Ri
 | `bHasRightSkirting` | Enables skirting on the right side of the wall. | `bool` | `true` |
 | `RightSkirtingHeightCm` | The height of the right skirting in centimeters. | `float` | `10.0` |
 | `RightSkirtingThicknessCm` | How far the right skirting extends from the wall surface in centimeters. | `float` | `1.5` |
-| `bHasCapSkirting` | Enables skirting on the start and end caps of the wall. | `bool` | `true` |
-| `CapSkirtingHeightCm` | The height of the cap skirting in centimeters. | `float` | `10.0` |
-| `CapSkirtingThicknessCm` | How far the cap skirting extends from the wall surface in centimeters. | `float` | `1.5` |
 
 ### Material / Finish Properties
 
-These properties reference material definitions from a catalog.
+These properties reference material definitions from a catalog. Each face of the wall and skirting has its own designated material - there are no fallbacks or shared defaults.
+
+#### Wall Face Materials
 
 | Property Name | Description | Type | Default Value |
 |---|---|---|---|
 | `FinishLeftId` | The material ID for the left face of the wall. | `FName` | `None` |
 | `FinishRightId` | The material ID for the right face of the wall. | `FName` | `None` |
-| `FinishCapsId` | The material ID for the top, bottom, start, and end faces of the wall. | `FName` | `None` |
-| `FinishLeftSkirtingId` | The material ID for the left skirting. | `FName` | `None` |
-| `FinishRightSkirtingId` | The material ID for the right skirting. | `FName` | `None` |
-| `FinishCapSkirtingId` | The material ID for the cap skirting. | `FName` | `None` |
+| `FinishTopId` | The material ID for the top face of the wall. | `FName` | `None` |
+| `FinishLeftCapId` | The material ID for the left/start cap face of the wall. | `FName` | `None` |
+| `FinishRightCapId` | The material ID for the right/end cap face of the wall. | `FName` | `None` |
+
+#### Left Skirting Materials
+
+| Property Name | Description | Type | Default Value |
+|---|---|---|---|
+| `FinishLeftSkirtingId` | The material ID for the left skirting front face. | `FName` | `None` |
+| `FinishLeftSkirtingTopId` | The material ID for the left skirting top face. | `FName` | `None` |
+| `FinishLeftSkirtingCapId` | The material ID for the left skirting cap faces (start/end). | `FName` | `None` |
+
+#### Right Skirting Materials
+
+| Property Name | Description | Type | Default Value |
+|---|---|---|---|
+| `FinishRightSkirtingId` | The material ID for the right skirting front face. | `FName` | `None` |
+| `FinishRightSkirtingTopId` | The material ID for the right skirting top face. | `FName` | `None` |
+| `FinishRightSkirtingCapId` | The material ID for the right skirting cap faces (start/end). | `FName` | `None` |
 
 ---
 

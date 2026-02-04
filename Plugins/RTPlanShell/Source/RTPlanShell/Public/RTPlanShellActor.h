@@ -54,16 +54,6 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "RTPlan|Shell")
 	int32 SelectionStencilValue = 1;
 
-	// --- Default Materials (when no finish is specified) ---
-
-	/** Default material for wall left face */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "RTPlan|Shell|DefaultMaterials")
-	TObjectPtr<UMaterialInterface> DefaultWallMaterial;
-
-	/** Default material for skirting */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "RTPlan|Shell|DefaultMaterials")
-	TObjectPtr<UMaterialInterface> DefaultSkirtingMaterial;
-
 protected:
 	virtual void BeginPlay() override;
 
@@ -76,8 +66,8 @@ protected:
 	/** Apply materials to a wall mesh component based on finish IDs */
 	void ApplyWallMaterials(UDynamicMeshComponent* MeshComp, const struct FRTWall& Wall);
 
-	/** Get material for a finish ID, or default material if not found */
-	UMaterialInterface* GetMaterialForFinish(FName FinishId, UMaterialInterface* DefaultMat) const;
+	/** Get material for a finish ID, returns nullptr if not found (no fallback) */
+	UMaterialInterface* GetMaterialForFinish(FName FinishId) const;
 
 	// The main combined mesh (for non-selected walls or legacy mode)
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)

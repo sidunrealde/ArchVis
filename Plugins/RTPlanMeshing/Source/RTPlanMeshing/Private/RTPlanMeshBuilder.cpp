@@ -9,6 +9,8 @@
 #include "DynamicMesh/DynamicMeshAttributeSet.h"
 
 // Helper to add a quad with proper UVs, Normals, and MaterialID
+// Vertices P0,P1,P2,P3 should be wound counter-clockwise when viewed from the normal direction
+// The quad is split into two triangles: (P0,P1,P2) and (P0,P2,P3)
 void AddQuad(
 	FDynamicMesh3& Mesh,
 	const FVector3d& P0, const FVector3d& P1, const FVector3d& P2, const FVector3d& P3,
@@ -24,8 +26,10 @@ void AddQuad(
 	int32 V2 = Mesh.AppendVertex(P2);
 	int32 V3 = Mesh.AppendVertex(P3);
 
-	int32 T0 = Mesh.AppendTriangle(V0, V1, V3, MaterialID);
-	int32 T1 = Mesh.AppendTriangle(V1, V2, V3, MaterialID);
+	// Split quad into two triangles with consistent CCW winding
+	// T0: P0 -> P1 -> P2, T1: P0 -> P2 -> P3
+	int32 T0 = Mesh.AppendTriangle(V0, V1, V2, MaterialID);
+	int32 T1 = Mesh.AppendTriangle(V0, V2, V3, MaterialID);
 
 	if (T0 >= 0 && T1 >= 0)
 	{
@@ -35,14 +39,17 @@ void AddQuad(
 			int32 UV_ID1 = UVs->AppendElement(UV1);
 			int32 UV_ID2 = UVs->AppendElement(UV2);
 			int32 UV_ID3 = UVs->AppendElement(UV3);
-			UVs->SetTriangle(T0, UE::Geometry::FIndex3i(UV_ID0, UV_ID1, UV_ID3));
-			UVs->SetTriangle(T1, UE::Geometry::FIndex3i(UV_ID1, UV_ID2, UV_ID3));
+			UVs->SetTriangle(T0, UE::Geometry::FIndex3i(UV_ID0, UV_ID1, UV_ID2));
+			UVs->SetTriangle(T1, UE::Geometry::FIndex3i(UV_ID0, UV_ID2, UV_ID3));
 		}
 		if (Normals)
 		{
-			int32 N_ID = Normals->AppendElement(Normal);
-			Normals->SetTriangle(T0, UE::Geometry::FIndex3i(N_ID, N_ID, N_ID));
-			Normals->SetTriangle(T1, UE::Geometry::FIndex3i(N_ID, N_ID, N_ID));
+			int32 N_ID0 = Normals->AppendElement(Normal);
+			int32 N_ID1 = Normals->AppendElement(Normal);
+			int32 N_ID2 = Normals->AppendElement(Normal);
+			int32 N_ID3 = Normals->AppendElement(Normal);
+			Normals->SetTriangle(T0, UE::Geometry::FIndex3i(N_ID0, N_ID1, N_ID2));
+			Normals->SetTriangle(T1, UE::Geometry::FIndex3i(N_ID0, N_ID2, N_ID3));
 		}
 	}
 }
@@ -205,8 +212,6 @@ void FRTPlanMeshBuilder::AppendWallMesh(
 			FVector2f(Thickness * UVScale, Height * UVScale), FVector2f(0, Height * UVScale), 
 			FVector3f(-1, 0, 0), MaterialID_LeftCap);
 		
-		if (SkirtingHeight_Right > 0) AddQuad(Mesh, P_RS_Out, P_RB, P_RS_Top, P_RS_Out, FVector2f(), FVector2f(), FVector2f(), FVector2f(), FVector3f(-1, 0, 0), MaterialID_SkirtingRightCap);
-		
 		// End Cap (facing +X, uses RightCap as the primary material)
 		// Reversed winding
 		// UVs: U -> Thickness, V -> Height
@@ -214,6 +219,49 @@ void FRTPlanMeshBuilder::AppendWallMesh(
 			FVector2f(0, Height * UVScale), FVector2f(Thickness * UVScale, Height * UVScale), 
 			FVector2f(Thickness * UVScale, 0), FVector2f(0, 0), 
 			FVector3f(1, 0, 0), MaterialID_RightCap);
+
+		// --- Skirting Caps (Start and End caps for left/right skirting) ---
+		// Right Skirting Caps
+		if (SkirtingHeight_Right > 0 && SkirtingThickness_Right > 0)
+		{
+			// Right Skirting Start Cap (at X=0, facing -X)
+			// Points: RS_Out (outer bottom), RS_Top (outer top), Wall at skirting height (inner top), RB (inner bottom)
+			FVector3d P_RW_SkirtTop_Start(0, -HalfThickness, BaseZ + SkirtingHeight_Right);
+			// CCW when viewed from -X: OuterBottom -> InnerBottom -> InnerTop -> OuterTop
+			AddQuad(Mesh, P_RS_Out, P_RB, P_RW_SkirtTop_Start, P_RS_Top,
+				FVector2f(0, 0), FVector2f(SkirtingThickness_Right * UVScale, 0),
+				FVector2f(SkirtingThickness_Right * UVScale, SkirtingHeight_Right * UVScale), FVector2f(0, SkirtingHeight_Right * UVScale),
+				FVector3f(-1, 0, 0), MaterialID_SkirtingRightCap);
+			
+			// Right Skirting End Cap (at X=Length, facing +X)
+			FVector3d P_RW_SkirtTop_End(Length, -HalfThickness, BaseZ + SkirtingHeight_Right);
+			// CCW when viewed from +X: InnerBottom -> OuterBottom -> OuterTop -> InnerTop
+			AddQuad(Mesh, P_RB_End, P_RS_Out_End, P_RS_Top_End, P_RW_SkirtTop_End,
+				FVector2f(0, 0), FVector2f(SkirtingThickness_Right * UVScale, 0),
+				FVector2f(SkirtingThickness_Right * UVScale, SkirtingHeight_Right * UVScale), FVector2f(0, SkirtingHeight_Right * UVScale),
+				FVector3f(1, 0, 0), MaterialID_SkirtingRightCap);
+		}
+
+		// Left Skirting Caps
+		if (SkirtingHeight_Left > 0 && SkirtingThickness_Left > 0)
+		{
+			// Left Skirting Start Cap (at X=0, facing -X)
+			// Points: LS_Out (outer bottom), LS_Top (outer top), Wall at skirting height (inner top), LB (inner bottom)
+			FVector3d P_LW_SkirtTop_Start(0, HalfThickness, BaseZ + SkirtingHeight_Left);
+			// CCW when viewed from -X: InnerBottom -> OuterBottom -> OuterTop -> InnerTop
+			AddQuad(Mesh, P_LB, P_LS_Out, P_LS_Top, P_LW_SkirtTop_Start,
+				FVector2f(0, 0), FVector2f(SkirtingThickness_Left * UVScale, 0),
+				FVector2f(SkirtingThickness_Left * UVScale, SkirtingHeight_Left * UVScale), FVector2f(0, SkirtingHeight_Left * UVScale),
+				FVector3f(-1, 0, 0), MaterialID_SkirtingLeftCap);
+			
+			// Left Skirting End Cap (at X=Length, facing +X)
+			FVector3d P_LW_SkirtTop_End(Length, HalfThickness, BaseZ + SkirtingHeight_Left);
+			// CCW when viewed from +X: OuterBottom -> InnerBottom -> InnerTop -> OuterTop
+			AddQuad(Mesh, P_LS_Out_End, P_LB_End, P_LW_SkirtTop_End, P_LS_Top_End,
+				FVector2f(0, 0), FVector2f(SkirtingThickness_Left * UVScale, 0),
+				FVector2f(SkirtingThickness_Left * UVScale, SkirtingHeight_Left * UVScale), FVector2f(0, SkirtingHeight_Left * UVScale),
+				FVector3f(1, 0, 0), MaterialID_SkirtingLeftCap);
+		}
 		
 		// --- Cap Skirting ---
 		if (SkirtingHeight_Cap > 0 && SkirtingThickness_Cap > 0)
