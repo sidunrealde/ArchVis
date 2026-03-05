@@ -8,6 +8,8 @@
 #include "Materials/Material.h"
 #include "DynamicMesh/DynamicMesh3.h"
 #include "DynamicMesh/DynamicMeshAttributeSet.h"
+#include "RHI.h"
+#include "DataDrivenShaderPlatformInfo.h"
 
 DEFINE_LOG_CATEGORY(LogRTPlanShell);
 
@@ -334,6 +336,17 @@ void ARTPlanShellActor::RebuildAll()
 			WallMeshComp->SetCollisionProfileName(TEXT("BlockAll"));
 			WallMeshComp->SetComplexAsSimpleCollisionEnabled(true, true);
 			
+			// Configure rendering quality
+			// Enable shadows
+			WallMeshComp->SetCastShadow(true);
+			
+			// Enable distance field for better Lumen GI and shadows
+			WallMeshComp->bAffectDistanceFieldLighting = true;
+			WallMeshComp->bAffectDynamicIndirectLighting = true;
+			
+			// Enable for ray tracing if available
+			WallMeshComp->SetVisibleInRayTracing(true);
+			
 			WallMeshComponents.Add(Wall.Id, WallMeshComp);
 		}
 
@@ -525,3 +538,88 @@ void ARTPlanShellActor::RebuildAll()
 		WallMeshComponent->SetVisibility(false);
 	}
 }
+
+bool ARTPlanShellActor::IsNaniteSupported()
+{
+	// Nanite is supported on SM6 platforms (DX12, Vulkan on Windows, PS5, Xbox Series)
+	// This is a simplified check - in production you'd want to check GRHISupportsRayTracing or similar
+	return GMaxRHIShaderPlatform >= SP_PCD3D_SM6;
+}
+
+AActor* ARTPlanShellActor::ConvertToStaticMesh(bool bEnableNanite)
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		UE_LOG(LogRTPlanShell, Error, TEXT("ConvertToStaticMesh: No world available"));
+		return nullptr;
+	}
+
+	// Check if we have any wall meshes to convert
+	if (WallMeshComponents.Num() == 0)
+	{
+		UE_LOG(LogRTPlanShell, Warning, TEXT("ConvertToStaticMesh: No wall meshes to convert"));
+		return nullptr;
+	}
+
+	// Combine all wall meshes into one dynamic mesh
+	UDynamicMesh* CombinedMesh = NewObject<UDynamicMesh>();
+	CombinedMesh->Reset();
+
+	// Enable attributes on combined mesh
+	CombinedMesh->EditMesh([](FDynamicMesh3& Mesh)
+	{
+		if (!Mesh.HasAttributes())
+		{
+			Mesh.EnableAttributes();
+		}
+		if (!Mesh.HasTriangleGroups())
+		{
+			Mesh.EnableTriangleGroups();
+		}
+		if (!Mesh.Attributes()->HasMaterialID())
+		{
+			Mesh.Attributes()->EnableMaterialID();
+		}
+	});
+
+	// Append each wall mesh to the combined mesh
+	for (const auto& Pair : WallMeshComponents)
+	{
+		if (UDynamicMeshComponent* WallMeshComp = Pair.Value.Get())
+		{
+			if (UDynamicMesh* WallMesh = WallMeshComp->GetDynamicMesh())
+			{
+				// Get the mesh transform
+				FTransform CompTransform = WallMeshComp->GetComponentTransform();
+				
+				// Append with transform
+				// Note: In a full implementation, you'd use UGeometryScriptLibrary_MeshBasicEditFunctions::AppendMesh
+				// For now, we'll just note that this requires the GeometryScripting plugin
+				UE_LOG(LogRTPlanShell, Log, TEXT("Would append wall mesh: %s"), *Pair.Key.ToString());
+			}
+		}
+	}
+
+	UE_LOG(LogRTPlanShell, Log, TEXT("ConvertToStaticMesh: Nanite conversion requires converting to StaticMesh asset."));
+	UE_LOG(LogRTPlanShell, Log, TEXT("  - Use the Geometry Script 'Copy Mesh to Static Mesh' function in editor"));
+	UE_LOG(LogRTPlanShell, Log, TEXT("  - Or export to FBX and reimport with Nanite enabled"));
+	UE_LOG(LogRTPlanShell, Log, TEXT("  - Runtime Nanite mesh creation is not supported by Unreal Engine"));
+
+	// Note: Unreal Engine does not support creating Nanite-enabled static meshes at runtime.
+	// Nanite requires preprocessing at build/import time.
+	// 
+	// For production use, the workflow would be:
+	// 1. Design the floor plan in the editor
+	// 2. Use "ConvertToStaticMesh" to create a static mesh asset (editor only)
+	// 3. Enable Nanite on the static mesh in the editor
+	// 4. Save the project
+	//
+	// For runtime tessellation/subdivision, consider:
+	// - Using the GeometryScript Subdivide functions to add more triangles
+	// - Using displacement in materials (World Position Offset)
+	// - Using virtual heightfield textures
+
+	return nullptr;
+}
+

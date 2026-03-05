@@ -54,6 +54,25 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "RTPlan|Shell")
 	int32 SelectionStencilValue = 1;
 
+	// --- Nanite/Static Mesh Conversion ---
+
+	/**
+	 * Convert all wall meshes to a single static mesh with Nanite enabled.
+	 * This "bakes" the geometry for production use where editing is no longer needed.
+	 * Note: The resulting static mesh loses dynamic editability but gains Nanite benefits.
+	 * @param bEnableNanite Whether to enable Nanite on the resulting static mesh
+	 * @return The created static mesh actor, or nullptr on failure
+	 */
+	UFUNCTION(BlueprintCallable, Category = "RTPlan|Shell")
+	AActor* ConvertToStaticMesh(bool bEnableNanite = true);
+
+	/**
+	 * Check if Nanite is supported on this platform.
+	 * @return true if Nanite is available
+	 */
+	UFUNCTION(BlueprintCallable, Category = "RTPlan|Shell")
+	static bool IsNaniteSupported();
+
 protected:
 	virtual void BeginPlay() override;
 

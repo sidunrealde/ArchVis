@@ -18,7 +18,11 @@ public class RTPlanShell : ModuleRules
 				"RTPlanOpenings",
 				"RTPlanCatalog", // For finish catalog
 				"GeometryFramework",
-				"GeometryScriptingCore"
+				"GeometryScriptingCore",
+				"GeometryCore",        // For FDynamicMesh3, FDynamicMeshAttributeSet
+				"DynamicMesh",         // Additional dynamic mesh support
+				"RHI",                 // For GMaxRHIShaderPlatform (Nanite check)
+				"RenderCore"           // For shader platform enums
 			}
 		);
 

@@ -126,6 +126,9 @@ void AArchVisPlayerController::BeginPlay()
 	// Set up initial Input Mapping Contexts
 	UpdateInputMappingContexts();
 
+	// Note: Initial lighting mode is set in OnGameModeReady() because
+	// the viewport may not be fully ready during BeginPlay
+
 	// Note: Selection system setup is deferred to OnGameModeReady() because
 	// GameMode::StartPlay creates ToolManager and ShellActor AFTER BeginPlay
 
@@ -171,6 +174,23 @@ void AArchVisPlayerController::OnGameModeReady()
 
 	// Set up the wall properties widget
 	SetupWallPropertiesWidget();
+
+	// Set initial lighting mode based on current pawn type with a slight delay
+	// to ensure the viewport is fully initialized
+	// 2D drafting defaults to Unlit for cleaner CAD-style view
+	// 3D modes default to Lit for realistic visualization
+	FTimerHandle TimerHandle;
+	GetWorld()->GetTimerManager().SetTimer(TimerHandle, [this]()
+	{
+		if (CurrentPawnType == EArchVisPawnType::Drafting2D)
+		{
+			SetLightingMode(EArchVisLightingMode::Unlit);
+		}
+		else
+		{
+			SetLightingMode(EArchVisLightingMode::Lit);
+		}
+	}, 0.1f, false);
 }
 
 void AArchVisPlayerController::SetupInputComponent()
@@ -2189,10 +2209,14 @@ void AArchVisPlayerController::SwitchToPawnType(EArchVisPawnType NewPawnType)
 		if (NewPawnType == EArchVisPawnType::Drafting2D)
 		{
 			SetInteractionMode(EArchVisInteractionMode::Drafting2D);
+			// 2D mode defaults to Unlit for cleaner drafting view
+			SetLightingMode(EArchVisLightingMode::Unlit);
 		}
 		else
 		{
 			SetInteractionMode(EArchVisInteractionMode::Navigation3D);
+			// 3D mode defaults to Lit for realistic visualization
+			SetLightingMode(EArchVisLightingMode::Lit);
 		}
 
 		UE_LOG(LogArchVisPC, Log, TEXT("Switched to pawn type: %d"), static_cast<int32>(NewPawnType));
@@ -2431,6 +2455,69 @@ void AArchVisPlayerController::SetupWallPropertiesWidget()
 	{
 		ShellActor->SetFinishCatalog(FinishCatalog);
 		UE_LOG(LogArchVisPC, Log, TEXT("FinishCatalog set on ShellActor"));
+	}
+}
+
+// ============================================
+// LIGHTING MODE
+// ============================================
+
+void AArchVisPlayerController::SetLightingMode(EArchVisLightingMode NewMode)
+{
+	if (CurrentLightingMode == NewMode)
+	{
+		return;
+	}
+
+	CurrentLightingMode = NewMode;
+
+	// Use console commands which are the most reliable way to switch view modes
+	// These work in both editor PIE and packaged builds
+	switch (NewMode)
+	{
+	case EArchVisLightingMode::Lit:
+		ConsoleCommand(TEXT("viewmode lit"));
+		break;
+
+	case EArchVisLightingMode::Unlit:
+		ConsoleCommand(TEXT("viewmode unlit"));
+		break;
+
+	case EArchVisLightingMode::Wireframe:
+		ConsoleCommand(TEXT("viewmode wireframe"));
+		break;
+	}
+
+	UE_LOG(LogArchVisPC, Log, TEXT("SetLightingMode: %s"), 
+		NewMode == EArchVisLightingMode::Lit ? TEXT("Lit") : 
+		NewMode == EArchVisLightingMode::Unlit ? TEXT("Unlit") : TEXT("Wireframe"));
+}
+
+void AArchVisPlayerController::ToggleLightingMode()
+{
+	if (CurrentLightingMode == EArchVisLightingMode::Lit)
+	{
+		SetLightingMode(EArchVisLightingMode::Unlit);
+	}
+	else
+	{
+		SetLightingMode(EArchVisLightingMode::Lit);
+	}
+}
+
+void AArchVisPlayerController::CycleLightingMode()
+{
+	switch (CurrentLightingMode)
+	{
+	case EArchVisLightingMode::Lit:
+		SetLightingMode(EArchVisLightingMode::Unlit);
+		break;
+	case EArchVisLightingMode::Unlit:
+		SetLightingMode(EArchVisLightingMode::Wireframe);
+		break;
+	case EArchVisLightingMode::Wireframe:
+		SetLightingMode(EArchVisLightingMode::Lit);
+		break;
 	}
 }
 

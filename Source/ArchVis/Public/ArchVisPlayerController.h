@@ -79,6 +79,17 @@ enum class EArchVis2DToolMode : uint8
 };
 
 /**
+ * Lighting/View mode for the viewport.
+ */
+UENUM(BlueprintType)
+enum class EArchVisLightingMode : uint8
+{
+	Lit         UMETA(DisplayName = "Lit"),
+	Unlit       UMETA(DisplayName = "Unlit"),
+	Wireframe   UMETA(DisplayName = "Wireframe")
+};
+
+/**
  * Controller for ArchVis drafting application.
  * 
  * Responsibilities:
@@ -152,6 +163,24 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "ArchVis|Pawn")
 	AArchVisPawnBase* GetArchVisPawn() const;
+
+	// --- Lighting Mode ---
+
+	/** Set the viewport lighting mode (Lit, Unlit, Wireframe) */
+	UFUNCTION(BlueprintCallable, Category = "ArchVis|View")
+	void SetLightingMode(EArchVisLightingMode NewMode);
+
+	/** Get the current lighting mode */
+	UFUNCTION(BlueprintCallable, Category = "ArchVis|View")
+	EArchVisLightingMode GetLightingMode() const { return CurrentLightingMode; }
+
+	/** Toggle between Lit and Unlit modes */
+	UFUNCTION(BlueprintCallable, Category = "ArchVis|View")
+	void ToggleLightingMode();
+
+	/** Cycle through all lighting modes (Lit -> Unlit -> Wireframe -> Lit) */
+	UFUNCTION(BlueprintCallable, Category = "ArchVis|View")
+	void CycleLightingMode();
 
 	// --- Debug ---
 	
@@ -406,6 +435,7 @@ protected:
 	EDraftingMode CurrentDraftingMode = EDraftingMode::Wall;
 	EArchVis2DToolMode Current2DToolMode = EArchVis2DToolMode::Selection;
 	ERTPlanToolType CurrentToolType = ERTPlanToolType::None;
+	EArchVisLightingMode CurrentLightingMode = EArchVisLightingMode::Unlit;
 	bool bNumericEntryContextActive = false;
 
 	// Mouse position when numeric input started (buffer became non-empty)

@@ -20,6 +20,7 @@ void AddQuad(
 {
 	UE::Geometry::FDynamicMeshUVOverlay* UVs = Mesh.Attributes()->PrimaryUV();
 	UE::Geometry::FDynamicMeshNormalOverlay* Normals = Mesh.Attributes()->PrimaryNormals();
+	UE::Geometry::FDynamicMeshMaterialAttribute* MaterialIDs = Mesh.Attributes()->GetMaterialID();
 
 	int32 V0 = Mesh.AppendVertex(P0);
 	int32 V1 = Mesh.AppendVertex(P1);
@@ -33,6 +34,13 @@ void AddQuad(
 
 	if (T0 >= 0 && T1 >= 0)
 	{
+		// Set Material ID attribute for each triangle - this is what the renderer uses
+		if (MaterialIDs)
+		{
+			MaterialIDs->SetValue(T0, MaterialID);
+			MaterialIDs->SetValue(T1, MaterialID);
+		}
+		
 		if (UVs)
 		{
 			int32 UV_ID0 = UVs->AppendElement(UV0);
@@ -94,6 +102,13 @@ void FRTPlanMeshBuilder::AppendWallMesh(
 		if (!Mesh.HasTriangleGroups())
 		{
 			Mesh.EnableTriangleGroups();
+		}
+		
+		// Enable Material ID attribute - this is what the DynamicMeshComponent uses 
+		// to map triangles to material slots
+		if (!Mesh.Attributes()->HasMaterialID())
+		{
+			Mesh.Attributes()->EnableMaterialID();
 		}
 
 		float HalfThickness = Thickness * 0.5f;
@@ -438,6 +453,13 @@ void FRTPlanMeshBuilder::AppendCurvedWallMesh(
 		if (!Mesh.HasTriangleGroups())
 		{
 			Mesh.EnableTriangleGroups();
+		}
+		
+		// Enable Material ID attribute - this is what the DynamicMeshComponent uses 
+		// to map triangles to material slots
+		if (!Mesh.Attributes()->HasMaterialID())
+		{
+			Mesh.Attributes()->EnableMaterialID();
 		}
 
 		for (int32 i = 0; i < NumSegments; ++i)
