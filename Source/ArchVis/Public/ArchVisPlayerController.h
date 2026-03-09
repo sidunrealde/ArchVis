@@ -18,6 +18,8 @@ class UArchVisInputConfig;
 class UEnhancedInputLocalPlayerSubsystem;
 class UInputMappingContext;
 class UToolInputComponent;
+class URTPlanWallPropertiesWidget;
+class URTFinishCatalog;
 
 /**
  * How the snap/constraint modifier key behaves.
@@ -41,6 +43,17 @@ enum class EArchVisInteractionMode : uint8
 };
 
 /**
+ * Current 2D Drafting Mode (Wall, Floor, Ceiling).
+ */
+UENUM(BlueprintType)
+enum class EDraftingMode : uint8
+{
+	Wall,
+	Floor,
+	Ceiling
+};
+
+/**
  * Current 2D tool mode.
  */
 UENUM(BlueprintType)
@@ -48,10 +61,32 @@ enum class EArchVis2DToolMode : uint8
 {
 	None,
 	Selection,
+	// Wall Tools
 	LineTool,
 	PolylineTool,
 	ArcTool,
-	TrimTool
+	TrimTool,
+	// Floor Tools
+	DrawFloor,
+	NewFloorArea,
+	ExtrudeFloor,
+	ExtendFloorArea,
+	EditExtrude,
+	// Ceiling Tools
+	DrawCeiling,
+	CreateFalseCeiling,
+	EditFalseCeiling
+};
+
+/**
+ * Lighting/View mode for the viewport.
+ */
+UENUM(BlueprintType)
+enum class EArchVisLightingMode : uint8
+{
+	Lit         UMETA(DisplayName = "Lit"),
+	Unlit       UMETA(DisplayName = "Unlit"),
+	Wireframe   UMETA(DisplayName = "Wireframe")
 };
 
 /**
@@ -92,6 +127,12 @@ public:
 	EArchVisInteractionMode GetInteractionMode() const { return CurrentInteractionMode; }
 
 	UFUNCTION(BlueprintCallable, Category = "ArchVis|Input")
+	void SetDraftingMode(EDraftingMode NewMode);
+
+	UFUNCTION(BlueprintCallable, Category = "ArchVis|Input")
+	EDraftingMode GetDraftingMode() const { return CurrentDraftingMode; }
+
+	UFUNCTION(BlueprintCallable, Category = "ArchVis|Input")
 	void OnToolChanged(ERTPlanToolType NewToolType);
 
 	UFUNCTION(BlueprintCallable, Category = "ArchVis|Input")
@@ -122,6 +163,24 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "ArchVis|Pawn")
 	AArchVisPawnBase* GetArchVisPawn() const;
+
+	// --- Lighting Mode ---
+
+	/** Set the viewport lighting mode (Lit, Unlit, Wireframe) */
+	UFUNCTION(BlueprintCallable, Category = "ArchVis|View")
+	void SetLightingMode(EArchVisLightingMode NewMode);
+
+	/** Get the current lighting mode */
+	UFUNCTION(BlueprintCallable, Category = "ArchVis|View")
+	EArchVisLightingMode GetLightingMode() const { return CurrentLightingMode; }
+
+	/** Toggle between Lit and Unlit modes */
+	UFUNCTION(BlueprintCallable, Category = "ArchVis|View")
+	void ToggleLightingMode();
+
+	/** Cycle through all lighting modes (Lit -> Unlit -> Wireframe -> Lit) */
+	UFUNCTION(BlueprintCallable, Category = "ArchVis|View")
+	void CycleLightingMode();
 
 	// --- Debug ---
 	
@@ -176,6 +235,24 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input")
 	ERTLengthUnit DefaultUnit = ERTLengthUnit::Centimeters;
 
+	// --- Wall Properties Widget ---
+	
+	/** Widget class for wall properties panel. Set in Blueprint. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI|WallProperties")
+	TSubclassOf<URTPlanWallPropertiesWidget> WallPropertiesWidgetClass;
+
+	/** Finish catalog asset containing wall materials. Set in Blueprint. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI|WallProperties")
+	TSoftObjectPtr<URTFinishCatalog> FinishCatalogAsset;
+
+	/** Get the wall properties widget instance */
+	UFUNCTION(BlueprintCallable, Category = "UI|WallProperties")
+	URTPlanWallPropertiesWidget* GetWallPropertiesWidget() const { return WallPropertiesWidget; }
+
+	/** Get the loaded finish catalog */
+	UFUNCTION(BlueprintCallable, Category = "UI|WallProperties")
+	URTFinishCatalog* GetFinishCatalog() const { return FinishCatalog; }
+
 	// --- Snap Settings ---
 	
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Snap")
@@ -205,6 +282,11 @@ protected:
 	void OnModifierShiftCompleted(const FInputActionValue& Value);
 	void OnModifierAltStarted(const FInputActionValue& Value);
 	void OnModifierAltCompleted(const FInputActionValue& Value);
+
+	// --- Mode Switching Handlers ---
+	void OnModeWall(const FInputActionValue& Value);
+	void OnModeFloor(const FInputActionValue& Value);
+	void OnModeCeiling(const FInputActionValue& Value);
 
 	// --- Selection Input Handlers ---
 	void OnSelectStarted(const FInputActionValue& Value);
@@ -267,6 +349,18 @@ protected:
 	void OnToolPolylineHotkey(const FInputActionValue& Value);
 	void OnToolArcHotkey(const FInputActionValue& Value);
 	void OnToolTrimHotkey(const FInputActionValue& Value);
+
+	// Floor Tool Handlers
+	void OnToolDrawFloor(const FInputActionValue& Value);
+	void OnToolNewFloorArea(const FInputActionValue& Value);
+	void OnToolExtrudeFloor(const FInputActionValue& Value);
+	void OnToolExtendFloorArea(const FInputActionValue& Value);
+	void OnToolEditExtrude(const FInputActionValue& Value);
+
+	// Ceiling Tool Handlers
+	void OnToolDrawCeiling(const FInputActionValue& Value);
+	void OnToolCreateFalseCeiling(const FInputActionValue& Value);
+	void OnToolEditFalseCeiling(const FInputActionValue& Value);
 
 	// --- Console Commands ---
 	UFUNCTION(Exec)
@@ -338,8 +432,10 @@ protected:
 
 	// Current states
 	EArchVisInteractionMode CurrentInteractionMode = EArchVisInteractionMode::Drafting2D;
+	EDraftingMode CurrentDraftingMode = EDraftingMode::Wall;
 	EArchVis2DToolMode Current2DToolMode = EArchVis2DToolMode::Selection;
 	ERTPlanToolType CurrentToolType = ERTPlanToolType::None;
+	EArchVisLightingMode CurrentLightingMode = EArchVisLightingMode::Unlit;
 	bool bNumericEntryContextActive = false;
 
 	// Mouse position when numeric input started (buffer became non-empty)
@@ -355,6 +451,9 @@ protected:
 	UPROPERTY(Transient)
 	TObjectPtr<UInputMappingContext> ActiveModeBaseIMC;
 
+	UPROPERTY(Transient)
+	TObjectPtr<UInputMappingContext> ActiveDraftingModeIMC;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Input")
 	TObjectPtr<UToolInputComponent> ToolInput;
 
@@ -363,4 +462,18 @@ protected:
 
 	UPROPERTY(EditAnywhere, Category = "ArchVis|Debug")
 	bool bSelectionDebugEnabled = false;
+
+private:
+	// --- Wall Properties Widget ---
+	
+	/** The wall properties widget instance */
+	UPROPERTY(Transient)
+	TObjectPtr<URTPlanWallPropertiesWidget> WallPropertiesWidget;
+
+	/** The loaded finish catalog */
+	UPROPERTY(Transient)
+	TObjectPtr<URTFinishCatalog> FinishCatalog;
+
+	/** Setup the wall properties widget (called from OnGameModeReady) */
+	void SetupWallPropertiesWidget();
 };

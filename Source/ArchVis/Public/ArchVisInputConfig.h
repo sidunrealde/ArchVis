@@ -11,8 +11,13 @@
  * 
  * Context Hierarchy:
  * IMC_Global (Priority: 0 - Always Active)
+ * IMC_Global_Modes (Priority: 0 - Always Active)
  * │
- * ├── IMC_2D_Base (Priority: 1 - When in 2D mode)
+ * ├── IMC_Drafting_Navigation (Priority: 1 - When in 2D mode)
+ * │   ├── IMC_Drafting_Wall (Priority: 1 - Wall Mode)
+ * │   ├── IMC_Drafting_Floor (Priority: 1 - Floor Mode)
+ * │   ├── IMC_Drafting_Ceiling (Priority: 1 - Ceiling Mode)
+ * │   │
  * │   ├── IMC_2D_Selection (Priority: 2)
  * │   ├── IMC_2D_LineTool (Priority: 2)
  * │   │   └── IMC_NumericEntry (Priority: 3 - Layered when typing)
@@ -41,12 +46,33 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Contexts|Global")
 	TObjectPtr<UInputMappingContext> IMC_Global;
 
+	// Global Modes context - always active (Priority 0)
+	// Contains: Mode switching (1, 2, 3)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Contexts|Global")
+	TObjectPtr<UInputMappingContext> IMC_Global_Modes;
+
 	// --- 2D Mode Contexts ---
 	
-	// 2D Base context - active in 2D mode (Priority 1)
+	// Drafting Navigation context - active in 2D mode (Priority 1)
 	// Contains: Pan, Zoom, Pointer position, Grid/Snap toggles
+	// Renamed from IMC_2D_Base
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Contexts|2D")
-	TObjectPtr<UInputMappingContext> IMC_2D_Base;
+	TObjectPtr<UInputMappingContext> IMC_Drafting_Navigation;
+
+	// Wall Drafting context (Priority 1)
+	// Contains: Wall tool shortcuts (V, L, P, A, T)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Contexts|2D|Modes")
+	TObjectPtr<UInputMappingContext> IMC_Drafting_Wall;
+
+	// Floor Drafting context (Priority 1)
+	// Contains: Floor tool shortcuts
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Contexts|2D|Modes")
+	TObjectPtr<UInputMappingContext> IMC_Drafting_Floor;
+
+	// Ceiling Drafting context (Priority 1)
+	// Contains: Ceiling tool shortcuts
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Contexts|2D|Modes")
+	TObjectPtr<UInputMappingContext> IMC_Drafting_Ceiling;
 
 	// 2D Selection tool context (Priority 2)
 	// Contains: Select, BoxSelect, SelectAll, DeselectAll
@@ -129,7 +155,20 @@ public:
 	TObjectPtr<UInputAction> IA_Save;  // Ctrl+S
 
 	// ============================================
-	// VIEW ACTIONS (IMC_2D_Base / IMC_3D_Base)
+	// MODE SWITCHING ACTIONS (IMC_Global_Modes)
+	// ============================================
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Modes")
+	TObjectPtr<UInputAction> IA_Mode_Wall;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Modes")
+	TObjectPtr<UInputAction> IA_Mode_Floor;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Modes")
+	TObjectPtr<UInputAction> IA_Mode_Ceiling;
+
+	// ============================================
+	// VIEW ACTIONS (IMC_Drafting_Navigation / IMC_3D_Base)
 	// ============================================
 	
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|View")
@@ -316,4 +355,36 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Tools")
 	TObjectPtr<UInputAction> IA_ToolTrim;  // T key
+
+	// ============================================
+	// FLOOR TOOLS
+	// ============================================
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Tools|Floor")
+	TObjectPtr<UInputAction> IA_Tool_DrawFloor;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Tools|Floor")
+	TObjectPtr<UInputAction> IA_Tool_NewFloorArea;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Tools|Floor")
+	TObjectPtr<UInputAction> IA_Tool_ExtrudeFloor;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Tools|Floor")
+	TObjectPtr<UInputAction> IA_Tool_ExtendFloorArea;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Tools|Floor")
+	TObjectPtr<UInputAction> IA_Tool_EditExtrude;
+
+	// ============================================
+	// CEILING TOOLS
+	// ============================================
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Tools|Ceiling")
+	TObjectPtr<UInputAction> IA_Tool_DrawCeiling;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Tools|Ceiling")
+	TObjectPtr<UInputAction> IA_Tool_CreateFalseCeiling;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Actions|Tools|Ceiling")
+	TObjectPtr<UInputAction> IA_Tool_EditFalseCeiling;
 };

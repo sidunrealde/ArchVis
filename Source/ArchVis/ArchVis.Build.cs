@@ -14,12 +14,15 @@ public class ArchVis : ModuleRules
 			"Engine", 
 			"InputCore", 
 			"EnhancedInput",
+			"UMG", // For widget creation
 			// Plugin Dependencies
 			"RTPlanCore",
 			"RTPlanTools",
 			"RTPlanShell",
 			"RTPlanInput",
-			"RTPlanNet"
+			"RTPlanNet",
+			"RTPlanUI",
+			"RTPlanCatalog"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });

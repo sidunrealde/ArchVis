@@ -3,7 +3,13 @@
 #include "RTPlanMeshBuilder.h"
 #include "RTPlanGeometryUtils.h"
 #include "RTPlanOpeningUtils.h"
+#include "RTPlanFinishCatalog.h"
 #include "UDynamicMesh.h"
+#include "Materials/Material.h"
+#include "DynamicMesh/DynamicMesh3.h"
+#include "DynamicMesh/DynamicMeshAttributeSet.h"
+#include "RHI.h"
+#include "DataDrivenShaderPlatformInfo.h"
 
 DEFINE_LOG_CATEGORY(LogRTPlanShell);
 
@@ -55,6 +61,172 @@ void ARTPlanShellActor::OnPlanChanged()
 {
 	UE_LOG(LogRTPlanShell, Log, TEXT("OnPlanChanged triggered"));
 	RebuildAll();
+}
+
+void ARTPlanShellActor::SetFinishCatalog(URTFinishCatalog* InCatalog)
+{
+	FinishCatalog = InCatalog;
+	// Rebuild to apply new materials
+	if (Document)
+	{
+		RebuildAll();
+	}
+}
+
+UMaterialInterface* ARTPlanShellActor::GetMaterialForFinish(FName FinishId) const
+{
+	if (FinishCatalog && !FinishId.IsNone())
+	{
+		UMaterialInterface* Mat = FinishCatalog->GetMaterialForFinish(FinishId);
+		if (Mat)
+		{
+			UE_LOG(LogRTPlanShell, Verbose, TEXT("GetMaterialForFinish: %s -> %s"), *FinishId.ToString(), *Mat->GetName());
+			return Mat;
+		}
+		else
+		{
+			UE_LOG(LogRTPlanShell, Warning, TEXT("GetMaterialForFinish: %s NOT FOUND in catalog"), *FinishId.ToString());
+		}
+	}
+	// Return nullptr if no finish ID specified or not found - no fallback
+	return nullptr;
+}
+
+void ARTPlanShellActor::ApplyWallMaterials(UDynamicMeshComponent* MeshComp, const FRTWall& Wall)
+{
+	if (!MeshComp) return;
+
+	// Material slot indices correspond to the MaterialID values used in AppendWallMesh:
+	//   0 = Left wall face
+	//   1 = Right wall face
+	//   2 = Top face
+	//   3 = Left cap (start)
+	//   4 = Right cap (end)
+	//   5 = Left skirting face
+	//   6 = Left skirting top
+	//   7 = Left skirting cap
+	//   8 = Right skirting face
+	//   9 = Right skirting top
+	//  10 = Right skirting cap
+
+	UE_LOG(LogRTPlanShell, Log, TEXT("ApplyWallMaterials: Wall=%s, FinishCatalog=%s"),
+		*Wall.Id.ToString(),
+		FinishCatalog ? *FinishCatalog->GetName() : TEXT("NULL"));
+
+	// Log the finish IDs being used
+	UE_LOG(LogRTPlanShell, Log, TEXT("  Finish IDs: Left=%s, Right=%s, Top=%s, LeftCap=%s, RightCap=%s"),
+		*Wall.FinishLeftId.ToString(),
+		*Wall.FinishRightId.ToString(),
+		*Wall.FinishTopId.ToString(),
+		*Wall.FinishLeftCapId.ToString(),
+		*Wall.FinishRightCapId.ToString());
+
+	// Engine default material as fallback for empty slots
+	UMaterialInterface* DefaultMat = UMaterial::GetDefaultMaterial(MD_Surface);
+
+	// Helper lambda to get material or default
+	auto GetMat = [this, DefaultMat](FName FinishId) -> UMaterialInterface*
+	{
+		UMaterialInterface* Mat = GetMaterialForFinish(FinishId);
+		return Mat ? Mat : DefaultMat;
+	};
+
+	// --- Wall faces - each gets its own designated material ---
+	UMaterialInterface* MatLeft = GetMat(Wall.FinishLeftId);
+	UMaterialInterface* MatRight = GetMat(Wall.FinishRightId);
+	UMaterialInterface* MatTop = GetMat(Wall.FinishTopId);
+	UMaterialInterface* MatLeftCap = GetMat(Wall.FinishLeftCapId);
+	UMaterialInterface* MatRightCap = GetMat(Wall.FinishRightCapId);
+	
+	// --- Left Skirting - each face gets its own designated material ---
+	UMaterialInterface* MatSkirtingLeft = GetMat(Wall.FinishLeftSkirtingId);
+	UMaterialInterface* MatSkirtingLeftTop = GetMat(Wall.FinishLeftSkirtingTopId);
+	UMaterialInterface* MatSkirtingLeftCap = GetMat(Wall.FinishLeftSkirtingCapId);
+	
+	// --- Right Skirting - each face gets its own designated material ---
+	UMaterialInterface* MatSkirtingRight = GetMat(Wall.FinishRightSkirtingId);
+	UMaterialInterface* MatSkirtingRightTop = GetMat(Wall.FinishRightSkirtingTopId);
+	UMaterialInterface* MatSkirtingRightCap = GetMat(Wall.FinishRightSkirtingCapId);
+
+	UE_LOG(LogRTPlanShell, Log, TEXT("  Wall Materials: Left=%s, Right=%s, Top=%s, LeftCap=%s, RightCap=%s"),
+		MatLeft ? *MatLeft->GetName() : TEXT("NULL"),
+		MatRight ? *MatRight->GetName() : TEXT("NULL"),
+		MatTop ? *MatTop->GetName() : TEXT("NULL"),
+		MatLeftCap ? *MatLeftCap->GetName() : TEXT("NULL"),
+		MatRightCap ? *MatRightCap->GetName() : TEXT("NULL"));
+	
+	UE_LOG(LogRTPlanShell, Log, TEXT("  Left Skirting Materials: Face=%s, Top=%s, Cap=%s"),
+		MatSkirtingLeft ? *MatSkirtingLeft->GetName() : TEXT("NULL"),
+		MatSkirtingLeftTop ? *MatSkirtingLeftTop->GetName() : TEXT("NULL"),
+		MatSkirtingLeftCap ? *MatSkirtingLeftCap->GetName() : TEXT("NULL"));
+	
+	UE_LOG(LogRTPlanShell, Log, TEXT("  Right Skirting Materials: Face=%s, Top=%s, Cap=%s"),
+		MatSkirtingRight ? *MatSkirtingRight->GetName() : TEXT("NULL"),
+		MatSkirtingRightTop ? *MatSkirtingRightTop->GetName() : TEXT("NULL"),
+		MatSkirtingRightCap ? *MatSkirtingRightCap->GetName() : TEXT("NULL"));
+
+	// Build array of materials for ConfigureMaterialSet
+	// This tells the DynamicMeshComponent which materials map to which triangle group IDs
+	TArray<UMaterialInterface*> MaterialSet;
+	MaterialSet.SetNum(11);
+	MaterialSet[0] = MatLeft;
+	MaterialSet[1] = MatRight;
+	MaterialSet[2] = MatTop;
+	MaterialSet[3] = MatLeftCap;
+	MaterialSet[4] = MatRightCap;
+	MaterialSet[5] = MatSkirtingLeft;
+	MaterialSet[6] = MatSkirtingLeftTop;
+	MaterialSet[7] = MatSkirtingLeftCap;
+	MaterialSet[8] = MatSkirtingRight;
+	MaterialSet[9] = MatSkirtingRightTop;
+	MaterialSet[10] = MatSkirtingRightCap;
+
+	// Configure the material set on the component - this maps triangle groups to material slots
+	MeshComp->ConfigureMaterialSet(MaterialSet);
+
+	// Also explicitly set each material slot to ensure they're applied
+	for (int32 i = 0; i < MaterialSet.Num(); ++i)
+	{
+		MeshComp->SetMaterial(i, MaterialSet[i]);
+	}
+	
+	// Debug: Log material slot count and triangle group info
+	UDynamicMesh* DynMesh = MeshComp->GetDynamicMesh();
+	if (DynMesh)
+	{
+		DynMesh->ProcessMesh([&](const FDynamicMesh3& Mesh)
+		{
+			bool bHasMaterialID = Mesh.HasAttributes() && Mesh.Attributes()->HasMaterialID();
+			UE_LOG(LogRTPlanShell, Log, TEXT("  Mesh Info: TriCount=%d, HasTriangleGroups=%d, HasMaterialID=%d, NumMaterialSlots=%d"),
+				Mesh.TriangleCount(),
+				Mesh.HasTriangleGroups() ? 1 : 0,
+				bHasMaterialID ? 1 : 0,
+				MeshComp->GetNumMaterials());
+			
+			// Count triangles per material ID (this is what the renderer uses)
+			if (bHasMaterialID)
+			{
+				const UE::Geometry::FDynamicMeshMaterialAttribute* MatIDs = Mesh.Attributes()->GetMaterialID();
+				TMap<int32, int32> MaterialCounts;
+				for (int32 Tid : Mesh.TriangleIndicesItr())
+				{
+					int32 MatId = MatIDs->GetValue(Tid);
+					MaterialCounts.FindOrAdd(MatId, 0)++;
+				}
+				for (const auto& Pair : MaterialCounts)
+				{
+					UE_LOG(LogRTPlanShell, Log, TEXT("    MaterialID %d: %d triangles"), Pair.Key, Pair.Value);
+				}
+			}
+			else
+			{
+				UE_LOG(LogRTPlanShell, Warning, TEXT("    No Material ID attribute on mesh!"));
+			}
+		});
+	}
+	
+	// Notify the mesh component that materials have been updated
+	MeshComp->NotifyMeshUpdated();
 }
 
 void ARTPlanShellActor::SetSelectedWalls(const TArray<FGuid>& WallIds)
@@ -164,6 +336,17 @@ void ARTPlanShellActor::RebuildAll()
 			WallMeshComp->SetCollisionProfileName(TEXT("BlockAll"));
 			WallMeshComp->SetComplexAsSimpleCollisionEnabled(true, true);
 			
+			// Configure rendering quality
+			// Enable shadows
+			WallMeshComp->SetCastShadow(true);
+			
+			// Enable distance field for better Lumen GI and shadows
+			WallMeshComp->bAffectDistanceFieldLighting = true;
+			WallMeshComp->bAffectDynamicIndirectLighting = true;
+			
+			// Enable for ray tracing if available
+			WallMeshComp->SetVisibleInRayTracing(true);
+			
 			WallMeshComponents.Add(Wall.Id, WallMeshComp);
 		}
 
@@ -192,10 +375,23 @@ void ARTPlanShellActor::RebuildAll()
 				Wall.bHasLeftSkirting ? Wall.LeftSkirtingThicknessCm : 0.0f,
 				Wall.bHasRightSkirting ? Wall.RightSkirtingHeightCm : 0.0f,
 				Wall.bHasRightSkirting ? Wall.RightSkirtingThicknessCm : 0.0f,
-				Wall.bHasCapSkirting ? Wall.CapSkirtingHeightCm : 0.0f,
-				Wall.bHasCapSkirting ? Wall.CapSkirtingThicknessCm : 0.0f,
-				0, 1, 2, 3, 4, 5  // Material IDs: Left, Right, Caps, SkirtLeft, SkirtRight, SkirtCap
+				0.0f,  // Cap skirting removed
+				0.0f,  // Cap skirting removed
+				0,  // MaterialID_Left
+				1,  // MaterialID_Right
+				2,  // MaterialID_Top
+				3,  // MaterialID_LeftCap
+				4,  // MaterialID_RightCap
+				5,  // MaterialID_SkirtingLeft
+				6,  // MaterialID_SkirtingLeftTop
+				7,  // MaterialID_SkirtingLeftCap
+				8,  // MaterialID_SkirtingRight
+				9,  // MaterialID_SkirtingRightTop
+				10  // MaterialID_SkirtingRightCap
 			);
+			
+			// Apply materials from finish catalog
+			ApplyWallMaterials(WallMeshComp, Wall);
 			
 			// Apply selection highlight
 			bool bIsSelected = SelectedWallIds.Contains(Wall.Id);
@@ -264,11 +460,29 @@ void ARTPlanShellActor::RebuildAll()
 					Wall.bHasLeftSkirting ? Wall.LeftSkirtingThicknessCm : 0.0f,
 					Wall.bHasRightSkirting ? Wall.RightSkirtingHeightCm : 0.0f,
 					Wall.bHasRightSkirting ? Wall.RightSkirtingThicknessCm : 0.0f,
-					Wall.bHasCapSkirting ? Wall.CapSkirtingHeightCm : 0.0f,
-					Wall.bHasCapSkirting ? Wall.CapSkirtingThicknessCm : 0.0f,
-					0, 1, 2, 3, 4, 5
+					0.0f,  // Cap skirting removed
+					0.0f,  // Cap skirting removed
+					0,  // MaterialID_Left
+					1,  // MaterialID_Right
+					2,  // MaterialID_Top
+					3,  // MaterialID_LeftCap
+					4,  // MaterialID_RightCap
+					5,  // MaterialID_SkirtingLeft
+					6,  // MaterialID_SkirtingLeftTop
+					7,  // MaterialID_SkirtingLeftCap
+					8,  // MaterialID_SkirtingRight
+					9,  // MaterialID_SkirtingRightTop
+					10  // MaterialID_SkirtingRightCap
 				);
 			}
+			
+			// Apply materials from finish catalog (walls with openings)
+			ApplyWallMaterials(WallMeshComp, Wall);
+			
+			// Apply selection highlight
+			bool bIsSelected = SelectedWallIds.Contains(Wall.Id);
+			WallMeshComp->SetRenderCustomDepth(bIsSelected);
+			WallMeshComp->SetCustomDepthStencilValue(bIsSelected ? SelectionStencilValue : 0);
 		}
 		else
 		{
@@ -293,11 +507,24 @@ void ARTPlanShellActor::RebuildAll()
 				Wall.bHasLeftSkirting ? Wall.LeftSkirtingThicknessCm : 0.0f,
 				Wall.bHasRightSkirting ? Wall.RightSkirtingHeightCm : 0.0f,
 				Wall.bHasRightSkirting ? Wall.RightSkirtingThicknessCm : 0.0f,
-				Wall.bHasCapSkirting ? Wall.CapSkirtingHeightCm : 0.0f,
-				Wall.bHasCapSkirting ? Wall.CapSkirtingThicknessCm : 0.0f,
-				0, 1, 2, 3, 4, 5
+				0.0f,  // Cap skirting removed
+				0.0f,  // Cap skirting removed
+				0,  // MaterialID_Left
+				1,  // MaterialID_Right
+				2,  // MaterialID_Top
+				3,  // MaterialID_LeftCap
+				4,  // MaterialID_RightCap
+				5,  // MaterialID_SkirtingLeft
+				6,  // MaterialID_SkirtingLeftTop
+				7,  // MaterialID_SkirtingLeftCap
+				8,  // MaterialID_SkirtingRight
+				9,  // MaterialID_SkirtingRightTop
+				10  // MaterialID_SkirtingRightCap
 			);
 		}
+
+		// Apply materials from finish catalog
+		ApplyWallMaterials(WallMeshComp, Wall);
 
 		// Apply selection highlight if this wall is selected
 		bool bIsSelected = SelectedWallIds.Contains(Wall.Id);
@@ -311,3 +538,88 @@ void ARTPlanShellActor::RebuildAll()
 		WallMeshComponent->SetVisibility(false);
 	}
 }
+
+bool ARTPlanShellActor::IsNaniteSupported()
+{
+	// Nanite is supported on SM6 platforms (DX12, Vulkan on Windows, PS5, Xbox Series)
+	// This is a simplified check - in production you'd want to check GRHISupportsRayTracing or similar
+	return GMaxRHIShaderPlatform >= SP_PCD3D_SM6;
+}
+
+AActor* ARTPlanShellActor::ConvertToStaticMesh(bool bEnableNanite)
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		UE_LOG(LogRTPlanShell, Error, TEXT("ConvertToStaticMesh: No world available"));
+		return nullptr;
+	}
+
+	// Check if we have any wall meshes to convert
+	if (WallMeshComponents.Num() == 0)
+	{
+		UE_LOG(LogRTPlanShell, Warning, TEXT("ConvertToStaticMesh: No wall meshes to convert"));
+		return nullptr;
+	}
+
+	// Combine all wall meshes into one dynamic mesh
+	UDynamicMesh* CombinedMesh = NewObject<UDynamicMesh>();
+	CombinedMesh->Reset();
+
+	// Enable attributes on combined mesh
+	CombinedMesh->EditMesh([](FDynamicMesh3& Mesh)
+	{
+		if (!Mesh.HasAttributes())
+		{
+			Mesh.EnableAttributes();
+		}
+		if (!Mesh.HasTriangleGroups())
+		{
+			Mesh.EnableTriangleGroups();
+		}
+		if (!Mesh.Attributes()->HasMaterialID())
+		{
+			Mesh.Attributes()->EnableMaterialID();
+		}
+	});
+
+	// Append each wall mesh to the combined mesh
+	for (const auto& Pair : WallMeshComponents)
+	{
+		if (UDynamicMeshComponent* WallMeshComp = Pair.Value.Get())
+		{
+			if (UDynamicMesh* WallMesh = WallMeshComp->GetDynamicMesh())
+			{
+				// Get the mesh transform
+				FTransform CompTransform = WallMeshComp->GetComponentTransform();
+				
+				// Append with transform
+				// Note: In a full implementation, you'd use UGeometryScriptLibrary_MeshBasicEditFunctions::AppendMesh
+				// For now, we'll just note that this requires the GeometryScripting plugin
+				UE_LOG(LogRTPlanShell, Log, TEXT("Would append wall mesh: %s"), *Pair.Key.ToString());
+			}
+		}
+	}
+
+	UE_LOG(LogRTPlanShell, Log, TEXT("ConvertToStaticMesh: Nanite conversion requires converting to StaticMesh asset."));
+	UE_LOG(LogRTPlanShell, Log, TEXT("  - Use the Geometry Script 'Copy Mesh to Static Mesh' function in editor"));
+	UE_LOG(LogRTPlanShell, Log, TEXT("  - Or export to FBX and reimport with Nanite enabled"));
+	UE_LOG(LogRTPlanShell, Log, TEXT("  - Runtime Nanite mesh creation is not supported by Unreal Engine"));
+
+	// Note: Unreal Engine does not support creating Nanite-enabled static meshes at runtime.
+	// Nanite requires preprocessing at build/import time.
+	// 
+	// For production use, the workflow would be:
+	// 1. Design the floor plan in the editor
+	// 2. Use "ConvertToStaticMesh" to create a static mesh asset (editor only)
+	// 3. Enable Nanite on the static mesh in the editor
+	// 4. Save the project
+	//
+	// For runtime tessellation/subdivision, consider:
+	// - Using the GeometryScript Subdivide functions to add more triangles
+	// - Using displacement in materials (World Position Offset)
+	// - Using virtual heightfield textures
+
+	return nullptr;
+}
+

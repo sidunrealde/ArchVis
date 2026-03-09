@@ -14,6 +14,11 @@
 #include "Tools/RTPlanArcTool.h"
 #include "Tools/RTPlanSelectTool.h"
 #include "RTPlanShellActor.h"
+#include "RTPlanSubsystem.h"
+#include "Blueprint/UserWidget.h"
+// Wall Properties Widget
+#include "RTPlanWallPropertiesWidget.h"
+#include "RTPlanFinishCatalog.h"
 #include "Kismet/GameplayStatics.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
@@ -121,6 +126,9 @@ void AArchVisPlayerController::BeginPlay()
 	// Set up initial Input Mapping Contexts
 	UpdateInputMappingContexts();
 
+	// Note: Initial lighting mode is set in OnGameModeReady() because
+	// the viewport may not be fully ready during BeginPlay
+
 	// Note: Selection system setup is deferred to OnGameModeReady() because
 	// GameMode::StartPlay creates ToolManager and ShellActor AFTER BeginPlay
 
@@ -137,6 +145,20 @@ void AArchVisPlayerController::OnGameModeReady()
 	AArchVisGameMode* GM = Cast<AArchVisGameMode>(UGameplayStatics::GetGameMode(this));
 	if (!GM) return;
 
+	// Register Document and ToolManager with the subsystem for global access
+	if (URTPlanSubsystem* Subsystem = URTPlanSubsystem::Get(this))
+	{
+		if (GM->GetDocument())
+		{
+			Subsystem->SetDocument(GM->GetDocument());
+		}
+		if (GM->GetToolManager())
+		{
+			Subsystem->SetToolManager(GM->GetToolManager());
+		}
+		UE_LOG(LogArchVisPC, Log, TEXT("Registered Document and ToolManager with RTPlanSubsystem"));
+	}
+
 	// Set up selection system now that ToolManager and ShellActor exist
 	if (URTPlanToolManager* ToolMgr = GM->GetToolManager())
 	{
@@ -149,6 +171,26 @@ void AArchVisPlayerController::OnGameModeReady()
 			SelectTool->OnSelectionChanged.AddDynamic(this, &AArchVisPlayerController::HandleSelectionChanged);
 		}
 	}
+
+	// Set up the wall properties widget
+	SetupWallPropertiesWidget();
+
+	// Set initial lighting mode based on current pawn type with a slight delay
+	// to ensure the viewport is fully initialized
+	// 2D drafting defaults to Unlit for cleaner CAD-style view
+	// 3D modes default to Lit for realistic visualization
+	FTimerHandle TimerHandle;
+	GetWorld()->GetTimerManager().SetTimer(TimerHandle, [this]()
+	{
+		if (CurrentPawnType == EArchVisPawnType::Drafting2D)
+		{
+			SetLightingMode(EArchVisLightingMode::Unlit);
+		}
+		else
+		{
+			SetLightingMode(EArchVisLightingMode::Lit);
+		}
+	}, 0.1f, false);
 }
 
 void AArchVisPlayerController::SetupInputComponent()
@@ -219,7 +261,25 @@ void AArchVisPlayerController::SetupInputComponent()
 			EIC->BindAction(InputConfig->IA_FocusSelection, ETriggerEvent::Started, this, &AArchVisPlayerController::OnFocusSelection);
 		}
 
-		// Tool hotkeys
+		// ============================================
+		// MODE SWITCHING ACTIONS
+		// ============================================
+		if (InputConfig->IA_Mode_Wall)
+		{
+			EIC->BindAction(InputConfig->IA_Mode_Wall, ETriggerEvent::Started, this, &AArchVisPlayerController::OnModeWall);
+		}
+		if (InputConfig->IA_Mode_Floor)
+		{
+			EIC->BindAction(InputConfig->IA_Mode_Floor, ETriggerEvent::Started, this, &AArchVisPlayerController::OnModeFloor);
+		}
+		if (InputConfig->IA_Mode_Ceiling)
+		{
+			EIC->BindAction(InputConfig->IA_Mode_Ceiling, ETriggerEvent::Started, this, &AArchVisPlayerController::OnModeCeiling);
+		}
+
+		// ============================================
+		// TOOL HOTKEYS
+		// ============================================
 		if (InputConfig->IA_ToolSelect)
 		{
 			EIC->BindAction(InputConfig->IA_ToolSelect, ETriggerEvent::Started, this, &AArchVisPlayerController::OnToolSelectHotkey);
@@ -239,6 +299,42 @@ void AArchVisPlayerController::SetupInputComponent()
 		if (InputConfig->IA_ToolTrim)
 		{
 			EIC->BindAction(InputConfig->IA_ToolTrim, ETriggerEvent::Started, this, &AArchVisPlayerController::OnToolTrimHotkey);
+		}
+
+		// Floor Tools
+		if (InputConfig->IA_Tool_DrawFloor)
+		{
+			EIC->BindAction(InputConfig->IA_Tool_DrawFloor, ETriggerEvent::Started, this, &AArchVisPlayerController::OnToolDrawFloor);
+		}
+		if (InputConfig->IA_Tool_NewFloorArea)
+		{
+			EIC->BindAction(InputConfig->IA_Tool_NewFloorArea, ETriggerEvent::Started, this, &AArchVisPlayerController::OnToolNewFloorArea);
+		}
+		if (InputConfig->IA_Tool_ExtrudeFloor)
+		{
+			EIC->BindAction(InputConfig->IA_Tool_ExtrudeFloor, ETriggerEvent::Started, this, &AArchVisPlayerController::OnToolExtrudeFloor);
+		}
+		if (InputConfig->IA_Tool_ExtendFloorArea)
+		{
+			EIC->BindAction(InputConfig->IA_Tool_ExtendFloorArea, ETriggerEvent::Started, this, &AArchVisPlayerController::OnToolExtendFloorArea);
+		}
+		if (InputConfig->IA_Tool_EditExtrude)
+		{
+			EIC->BindAction(InputConfig->IA_Tool_EditExtrude, ETriggerEvent::Started, this, &AArchVisPlayerController::OnToolEditExtrude);
+		}
+
+		// Ceiling Tools
+		if (InputConfig->IA_Tool_DrawCeiling)
+		{
+			EIC->BindAction(InputConfig->IA_Tool_DrawCeiling, ETriggerEvent::Started, this, &AArchVisPlayerController::OnToolDrawCeiling);
+		}
+		if (InputConfig->IA_Tool_CreateFalseCeiling)
+		{
+			EIC->BindAction(InputConfig->IA_Tool_CreateFalseCeiling, ETriggerEvent::Started, this, &AArchVisPlayerController::OnToolCreateFalseCeiling);
+		}
+		if (InputConfig->IA_Tool_EditFalseCeiling)
+		{
+			EIC->BindAction(InputConfig->IA_Tool_EditFalseCeiling, ETriggerEvent::Started, this, &AArchVisPlayerController::OnToolEditFalseCeiling);
 		}
 
 		// NOTE: Navigation actions (Pan, Zoom, Orbit, Fly, etc.) are now handled by
@@ -477,20 +573,37 @@ void AArchVisPlayerController::UpdateInputMappingContexts()
 
 	// Always add Global context (Priority 0)
 	AddMappingContext(InputConfig->IMC_Global, IMC_Priority_Global);
+	AddMappingContext(InputConfig->IMC_Global_Modes, IMC_Priority_Global);
 
 	// Remove old mode base context
 	RemoveMappingContext(ActiveModeBaseIMC);
+	RemoveMappingContext(ActiveDraftingModeIMC);
 	ClearAllToolContexts();
 	
 	if (CurrentInteractionMode == EArchVisInteractionMode::Drafting2D)
 	{
 		// Add 2D Base context (Priority 1)
-		ActiveModeBaseIMC = InputConfig->IMC_2D_Base;
+		ActiveModeBaseIMC = InputConfig->IMC_Drafting_Navigation;
 		if (!ActiveModeBaseIMC)
 		{
-			UE_LOG(LogArchVisPC, Error, TEXT("IMC_2D_Base is NULL in InputConfig!"));
+			UE_LOG(LogArchVisPC, Error, TEXT("IMC_Drafting_Navigation is NULL in InputConfig!"));
 		}
 		AddMappingContext(ActiveModeBaseIMC, IMC_Priority_ModeBase);
+
+		// Add Drafting Mode Context (Wall/Floor/Ceiling)
+		switch (CurrentDraftingMode)
+		{
+		case EDraftingMode::Wall:
+			ActiveDraftingModeIMC = InputConfig->IMC_Drafting_Wall;
+			break;
+		case EDraftingMode::Floor:
+			ActiveDraftingModeIMC = InputConfig->IMC_Drafting_Floor;
+			break;
+		case EDraftingMode::Ceiling:
+			ActiveDraftingModeIMC = InputConfig->IMC_Drafting_Ceiling;
+			break;
+		}
+		AddMappingContext(ActiveDraftingModeIMC, IMC_Priority_ModeBase);
 
 		// Add appropriate tool context (Priority 2)
 		SwitchTo2DToolMode(Current2DToolMode);
@@ -566,6 +679,19 @@ void AArchVisPlayerController::SwitchTo2DToolMode(EArchVis2DToolMode NewToolMode
 		ActiveToolIMC = InputConfig->IMC_2D_TrimTool;
 		break;
 
+	// New tools don't have specific IMCs yet, or reuse existing ones?
+	// For now, we assume they might use a generic "Draw" context or we need to add them.
+	// The plan says "Create IMC_FloorTools and IMC_CeilingTools" but in Editor Changes we put them in IMC_Drafting_Floor
+	// Wait, the tool context is for *active* tool actions (like Confirm/Cancel).
+	// We can reuse IMC_2D_PolylineTool for generic pen tools for now.
+	case EArchVis2DToolMode::DrawFloor:
+	case EArchVis2DToolMode::NewFloorArea:
+	case EArchVis2DToolMode::ExtrudeFloor:
+	case EArchVis2DToolMode::DrawCeiling:
+	case EArchVis2DToolMode::CreateFalseCeiling:
+		ActiveToolIMC = InputConfig->IMC_2D_PolylineTool; // Reuse polyline context for now
+		break;
+
 	default:
 		ActiveToolIMC = nullptr;
 		break;
@@ -578,7 +704,11 @@ void AArchVisPlayerController::SwitchTo2DToolMode(EArchVis2DToolMode NewToolMode
 
 	// For drawing tools (Line/Polyline), enable numeric entry context immediately
 	// so digit keys are available for precision input without needing a bootstrap trigger
-	if (NewToolMode == EArchVis2DToolMode::LineTool || NewToolMode == EArchVis2DToolMode::PolylineTool || NewToolMode == EArchVis2DToolMode::ArcTool)
+	if (NewToolMode == EArchVis2DToolMode::LineTool || 
+		NewToolMode == EArchVis2DToolMode::PolylineTool || 
+		NewToolMode == EArchVis2DToolMode::ArcTool ||
+		NewToolMode == EArchVis2DToolMode::DrawFloor ||
+		NewToolMode == EArchVis2DToolMode::DrawCeiling)
 	{
 		ActivateNumericEntryContext();
 	}
@@ -665,6 +795,28 @@ void AArchVisPlayerController::SetInteractionMode(EArchVisInteractionMode NewMod
 			UE_LOG(LogArchVisPC, Log, TEXT("SetInteractionMode -> %s"),
 				(CurrentInteractionMode == EArchVisInteractionMode::Drafting2D) ? TEXT("2D") : TEXT("3D"));
 		}
+	}
+}
+
+void AArchVisPlayerController::SetDraftingMode(EDraftingMode NewMode)
+{
+	if (CurrentDraftingMode != NewMode)
+	{
+		CurrentDraftingMode = NewMode;
+		UE_LOG(LogArchVisPC, Log, TEXT("SetDraftingMode -> %d"), static_cast<int32>(NewMode));
+		
+		// Reset tool to selection when changing modes
+		if (AArchVisGameMode* GM = Cast<AArchVisGameMode>(UGameplayStatics::GetGameMode(this)))
+		{
+			if (URTPlanToolManager* ToolMgr = GM->GetToolManager())
+			{
+				ToolMgr->SelectToolByType(ERTPlanToolType::Select);
+				OnToolChanged(ERTPlanToolType::Select);
+				SwitchTo2DToolMode(EArchVis2DToolMode::Selection);
+			}
+		}
+
+		UpdateInputMappingContexts();
 	}
 }
 
@@ -813,6 +965,25 @@ void AArchVisPlayerController::OnToggleView(const FInputActionValue& Value)
 
 	// Toggle between 2D and 3D pawns
 	ToggleViewPawn();
+}
+
+// ============================================
+// MODE SWITCHING HANDLERS
+// ============================================
+
+void AArchVisPlayerController::OnModeWall(const FInputActionValue& Value)
+{
+	SetDraftingMode(EDraftingMode::Wall);
+}
+
+void AArchVisPlayerController::OnModeFloor(const FInputActionValue& Value)
+{
+	SetDraftingMode(EDraftingMode::Floor);
+}
+
+void AArchVisPlayerController::OnModeCeiling(const FInputActionValue& Value)
+{
+	SetDraftingMode(EDraftingMode::Ceiling);
 }
 
 // ============================================
@@ -1650,6 +1821,66 @@ void AArchVisPlayerController::OnToolTrimHotkey(const FInputActionValue& Value)
 	}
 }
 
+// --- Floor Tool Handlers ---
+
+void AArchVisPlayerController::OnToolDrawFloor(const FInputActionValue& Value)
+{
+	UE_LOG(LogArchVisPC, Log, TEXT("OnToolDrawFloor triggered"));
+	SwitchTo2DToolMode(EArchVis2DToolMode::DrawFloor);
+	// TODO: Select actual tool when implemented
+}
+
+void AArchVisPlayerController::OnToolNewFloorArea(const FInputActionValue& Value)
+{
+	UE_LOG(LogArchVisPC, Log, TEXT("OnToolNewFloorArea triggered"));
+	SwitchTo2DToolMode(EArchVis2DToolMode::NewFloorArea);
+	// TODO: Select actual tool when implemented
+}
+
+void AArchVisPlayerController::OnToolExtrudeFloor(const FInputActionValue& Value)
+{
+	UE_LOG(LogArchVisPC, Log, TEXT("OnToolExtrudeFloor triggered"));
+	SwitchTo2DToolMode(EArchVis2DToolMode::ExtrudeFloor);
+	// TODO: Select actual tool when implemented
+}
+
+void AArchVisPlayerController::OnToolExtendFloorArea(const FInputActionValue& Value)
+{
+	UE_LOG(LogArchVisPC, Log, TEXT("OnToolExtendFloorArea triggered"));
+	SwitchTo2DToolMode(EArchVis2DToolMode::ExtendFloorArea);
+	// TODO: Select actual tool when implemented
+}
+
+void AArchVisPlayerController::OnToolEditExtrude(const FInputActionValue& Value)
+{
+	UE_LOG(LogArchVisPC, Log, TEXT("OnToolEditExtrude triggered"));
+	SwitchTo2DToolMode(EArchVis2DToolMode::EditExtrude);
+	// TODO: Select actual tool when implemented
+}
+
+// --- Ceiling Tool Handlers ---
+
+void AArchVisPlayerController::OnToolDrawCeiling(const FInputActionValue& Value)
+{
+	UE_LOG(LogArchVisPC, Log, TEXT("OnToolDrawCeiling triggered"));
+	SwitchTo2DToolMode(EArchVis2DToolMode::DrawCeiling);
+	// TODO: Select actual tool when implemented
+}
+
+void AArchVisPlayerController::OnToolCreateFalseCeiling(const FInputActionValue& Value)
+{
+	UE_LOG(LogArchVisPC, Log, TEXT("OnToolCreateFalseCeiling triggered"));
+	SwitchTo2DToolMode(EArchVis2DToolMode::CreateFalseCeiling);
+	// TODO: Select actual tool when implemented
+}
+
+void AArchVisPlayerController::OnToolEditFalseCeiling(const FInputActionValue& Value)
+{
+	UE_LOG(LogArchVisPC, Log, TEXT("OnToolEditFalseCeiling triggered"));
+	SwitchTo2DToolMode(EArchVis2DToolMode::EditFalseCeiling);
+	// TODO: Select actual tool when implemented
+}
+
 // ============================================
 // HELPER FUNCTIONS
 // ============================================
@@ -1978,10 +2209,14 @@ void AArchVisPlayerController::SwitchToPawnType(EArchVisPawnType NewPawnType)
 		if (NewPawnType == EArchVisPawnType::Drafting2D)
 		{
 			SetInteractionMode(EArchVisInteractionMode::Drafting2D);
+			// 2D mode defaults to Unlit for cleaner drafting view
+			SetLightingMode(EArchVisLightingMode::Unlit);
 		}
 		else
 		{
 			SetInteractionMode(EArchVisInteractionMode::Navigation3D);
+			// 3D mode defaults to Lit for realistic visualization
+			SetLightingMode(EArchVisLightingMode::Lit);
 		}
 
 		UE_LOG(LogArchVisPC, Log, TEXT("Switched to pawn type: %d"), static_cast<int32>(NewPawnType));
@@ -2136,3 +2371,153 @@ void AArchVisPlayerController::ArchVisToggleSelectionDebug()
 {
 	SetSelectionDebugEnabled(!bSelectionDebugEnabled);
 }
+
+void AArchVisPlayerController::SetupWallPropertiesWidget()
+{
+	AArchVisGameMode* GM = Cast<AArchVisGameMode>(UGameplayStatics::GetGameMode(this));
+	if (!GM)
+	{
+		UE_LOG(LogArchVisPC, Warning, TEXT("SetupWallPropertiesWidget: GameMode not found"));
+		return;
+	}
+
+	URTPlanDocument* Document = GM->GetDocument();
+	URTPlanToolManager* ToolManager = GM->GetToolManager();
+	ARTPlanShellActor* ShellActor = GM->GetShellActor();
+
+	// Load finish catalog
+	if (!FinishCatalogAsset.IsNull())
+	{
+		FinishCatalog = FinishCatalogAsset.LoadSynchronous();
+		if (FinishCatalog)
+		{
+			UE_LOG(LogArchVisPC, Log, TEXT("Loaded FinishCatalog: %s"), *FinishCatalog->GetName());
+		}
+		else
+		{
+			UE_LOG(LogArchVisPC, Warning, TEXT("Failed to load FinishCatalog from asset reference"));
+		}
+	}
+	else
+	{
+		UE_LOG(LogArchVisPC, Warning, TEXT("FinishCatalogAsset is not set. Assign DA_WallFinishes in Blueprint."));
+	}
+
+	// Create the wall properties widget
+	if (WallPropertiesWidgetClass)
+	{
+		WallPropertiesWidget = CreateWidget<URTPlanWallPropertiesWidget>(this, WallPropertiesWidgetClass);
+		if (WallPropertiesWidget)
+		{
+			// Get the select tool
+			URTPlanSelectTool* SelectTool = ToolManager ? ToolManager->GetSelectTool() : nullptr;
+
+			// Setup context (connect to document and select tool)
+			if (Document && SelectTool)
+			{
+				WallPropertiesWidget->SetupContext(Document, SelectTool);
+				UE_LOG(LogArchVisPC, Log, TEXT("WallPropertiesWidget context set up"));
+			}
+			else
+			{
+				UE_LOG(LogArchVisPC, Warning, TEXT("Cannot setup widget context: Document=%s, SelectTool=%s"),
+					Document ? TEXT("OK") : TEXT("NULL"),
+					SelectTool ? TEXT("OK") : TEXT("NULL"));
+			}
+
+			// Load materials from catalog
+			if (FinishCatalog)
+			{
+				WallPropertiesWidget->LoadMaterialsFromCatalog(FinishCatalog);
+				UE_LOG(LogArchVisPC, Log, TEXT("Loaded materials from catalog into widget"));
+			}
+
+			// Add to viewport (Z-order 10 so it's above other UI)
+			WallPropertiesWidget->AddToViewport(10);
+
+			// Start hidden (will show when a wall is selected)
+			WallPropertiesWidget->HidePanel();
+
+			UE_LOG(LogArchVisPC, Log, TEXT("WallPropertiesWidget created and added to viewport"));
+		}
+		else
+		{
+			UE_LOG(LogArchVisPC, Error, TEXT("Failed to create WallPropertiesWidget"));
+		}
+	}
+	else
+	{
+		UE_LOG(LogArchVisPC, Warning, TEXT("WallPropertiesWidgetClass is not set. Assign WBP_WallProperties in Blueprint."));
+	}
+
+	// Set finish catalog on shell actor for material lookups
+	if (ShellActor && FinishCatalog)
+	{
+		ShellActor->SetFinishCatalog(FinishCatalog);
+		UE_LOG(LogArchVisPC, Log, TEXT("FinishCatalog set on ShellActor"));
+	}
+}
+
+// ============================================
+// LIGHTING MODE
+// ============================================
+
+void AArchVisPlayerController::SetLightingMode(EArchVisLightingMode NewMode)
+{
+	if (CurrentLightingMode == NewMode)
+	{
+		return;
+	}
+
+	CurrentLightingMode = NewMode;
+
+	// Use console commands which are the most reliable way to switch view modes
+	// These work in both editor PIE and packaged builds
+	switch (NewMode)
+	{
+	case EArchVisLightingMode::Lit:
+		ConsoleCommand(TEXT("viewmode lit"));
+		break;
+
+	case EArchVisLightingMode::Unlit:
+		ConsoleCommand(TEXT("viewmode unlit"));
+		break;
+
+	case EArchVisLightingMode::Wireframe:
+		ConsoleCommand(TEXT("viewmode wireframe"));
+		break;
+	}
+
+	UE_LOG(LogArchVisPC, Log, TEXT("SetLightingMode: %s"), 
+		NewMode == EArchVisLightingMode::Lit ? TEXT("Lit") : 
+		NewMode == EArchVisLightingMode::Unlit ? TEXT("Unlit") : TEXT("Wireframe"));
+}
+
+void AArchVisPlayerController::ToggleLightingMode()
+{
+	if (CurrentLightingMode == EArchVisLightingMode::Lit)
+	{
+		SetLightingMode(EArchVisLightingMode::Unlit);
+	}
+	else
+	{
+		SetLightingMode(EArchVisLightingMode::Lit);
+	}
+}
+
+void AArchVisPlayerController::CycleLightingMode()
+{
+	switch (CurrentLightingMode)
+	{
+	case EArchVisLightingMode::Lit:
+		SetLightingMode(EArchVisLightingMode::Unlit);
+		break;
+	case EArchVisLightingMode::Unlit:
+		SetLightingMode(EArchVisLightingMode::Wireframe);
+		break;
+	case EArchVisLightingMode::Wireframe:
+		SetLightingMode(EArchVisLightingMode::Lit);
+		break;
+	}
+}
+

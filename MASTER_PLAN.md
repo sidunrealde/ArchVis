@@ -2,8 +2,8 @@
 
 > **Goal**: A CAD-like drafting experience for runtime architectural planning in Unreal Engine, supporting seamless 2D/3D switching, precision input, and auto-generation of shell geometry.
 
-**Last Updated**: January 19, 2026  
-**Current Focus**: 2D/3D Navigation Polish & Virtual Cursor Fixes
+**Last Updated**: January 20, 2026
+**Current Focus**: Drafting Modes & Floor/Ceiling Tools Implementation
 
 ---
 
@@ -20,6 +20,8 @@
 | **RTPlanMeshing** | Dynamic mesh generation for walls | ✅ Done |
 | **RTPlanShell** | 3D wall mesh rendering (`ARTPlanShellActor`) | ✅ Partial |
 | **RTPlanOpenings** | Door/Window wall splitting utilities | ✅ Partial |
+| **RTPlanFloors** | Floor generation, extrusion, and area management | ⏳ New |
+| **RTPlanCeilings** | Ceiling generation, false ceiling sections | ⏳ New |
 | **RTPlanUI** | UMG widgets (Toolbar, Properties, Catalog) | ⏳ Stub |
 | **RTPlanCatalog** | Product catalog data assets | ⏳ Stub |
 | **RTPlanObjects** | Furniture object lifecycle | ⏳ Stub |
@@ -89,16 +91,107 @@ AArchVisOrbitPawn
 
 ---
 
+## New Feature: Drafting Modes & Tool Expansion
+
+To support comprehensive architectural drafting, the system will now support three distinct 2D drafting modes. Each mode isolates specific elements for editing while maintaining context.
+
+### 1. Wall Drafting Mode
+*   **Focus**: Creating and editing the building shell (walls, doors, windows).
+*   **Visibility**:
+    *   **Walls**: Visible & Editable.
+    *   **Floors**: Visible (Reference only) & Not Editable.
+    *   **Ceilings**: Hidden.
+*   **Tools**:
+    *   Existing Wall Tools (Line, Polyline, Arc, Trim).
+    *   Opening Tools (Door, Window).
+
+### 2. Floor Drafting Mode
+*   **Focus**: Creating and editing floor slabs, areas, and extrusions.
+*   **Visibility**:
+    *   **Walls**: Visible (Reference only) & Not Editable.
+    *   **Floors**: Visible & Editable.
+    *   **Ceilings**: Hidden.
+*   **Tools**:
+    *   **Draw Floor**: Pen-tool style creation (Bezier/Polyline). Creates a floor mesh upon confirmation. Supports soft snapping to walls and grid.
+    *   **New Floor Area**: Pen-tool style. Defines a sub-area within an existing floor for material assignment (e.g., tiling, carpet).
+    *   **Extrude Floor**: Pen-tool style. Selects a floor area to extrude vertically (platform/stage).
+    *   **Extend Floor Area**: Modifies an existing floor area by adding to it.
+    *   **Edit Extrude Floor**: Modifies properties of an extruded floor (extrusion height, shape).
+
+### 3. Ceiling Drafting Mode
+*   **Focus**: Creating and editing ceiling plans, false ceilings, and lighting fixtures.
+*   **View**: Camera looks **up** at the ceiling in orthographic view (Reflected Ceiling Plan).
+*   **Visibility**:
+    *   **Walls**: Visible (Reference only) & Not Editable.
+    *   **Floors**: Hidden.
+    *   **Ceilings**: Visible & Editable.
+*   **Tools**:
+    *   **Draw Ceiling**: Similar to Draw Floor. Creates base ceiling mesh.
+    *   **Create False Ceiling Section**: Defines a dropped ceiling area (bulkhead/soffit).
+    *   **Edit False Ceiling Section**: Modifies the shape/extent of a false ceiling section.
+
+---
+
+## Implementation Plan
+
+### Phase 1: Data Model & Plugin Expansion
+1.  **Create `RTPlanFloors` Plugin**:
+    *   Define `URTPlanFloorItem`: Stores floor boundary (polygon), material, and extrusion data.
+    *   Define `URTPlanFloorArea`: Sub-regions for materials.
+2.  **Create `RTPlanCeilings` Plugin**:
+    *   Define `URTPlanCeilingItem`: Stores ceiling boundary.
+    *   Define `URTPlanFalseCeiling`: Stores false ceiling sections.
+3.  **Update `RTPlanCore`**:
+    *   Add `FloorItems` and `CeilingItems` lists to `URTPlanDocument`.
+    *   Implement serialization for new types.
+
+### Phase 2: Drafting Mode System
+1.  **Drafting Mode Manager**:
+    *   Create `UDraftingModeManager` (likely on `AArchVisGameMode` or `AArchVisPlayerController`).
+    *   Enum: `EDraftingMode { Wall, Floor, Ceiling }`.
+    *   Functions: `SetDraftingMode(Mode)`, `GetDraftingMode()`.
+2.  **Visibility System**:
+    *   Update `ARTPlanShellActor` to support visibility filtering based on mode.
+    *   Implement "Ghost/Reference" rendering for non-editable elements (e.g., walls in Floor Mode).
+3.  **Camera Updates**:
+    *   Update `AArchVisDraftingPawn` to support "Reflected Ceiling Plan" view (looking up).
+
+### Phase 3: Tool Implementation
+1.  **Pen Tool Base**:
+    *   Create a reusable `URTPlanPenTool` base class for Floor/Ceiling drawing.
+    *   Support Bezier curves and Polyline segments.
+2.  **Floor Tools**:
+    *   Implement `URTPlanDrawFloorTool` (inherits Pen Tool).
+    *   Implement `URTPlanExtrudeFloorTool`.
+    *   Implement `URTPlanEditFloorTool`.
+3.  **Ceiling Tools**:
+    *   Implement `URTPlanDrawCeilingTool`.
+    *   Implement `URTPlanFalseCeilingTool`.
+
+### Phase 4: Input System Refactoring
+To support mode-specific tool sets, the input system needs further refinement.
+
+1.  **Context-Aware Tool Selection**:
+    *   `UToolManager` needs to be aware of the current `DraftingMode`.
+    *   Tools should be registered with a "Supported Mode" flag.
+    *   UI should filter available tools based on the active mode.
+2.  **Input Mapping Contexts (IMCs)**:
+    *   Create `IMC_FloorMode` and `IMC_CeilingMode`.
+    *   Update `UDraftingInputComponent` to swap IMCs when `DraftingMode` changes.
+
+---
+
 ## Phase Status Summary
 
 | Phase | Description | Status |
 |-------|-------------|--------|
 | **Phase 0** | Baseline plumbing (game ↔ plugins) | ✅ Complete |
-| **Phase 1** | Viewport & Input (CAD Feel) | ✅ Complete (input assets + pawn system + navigation polished) |
-| **Phase 2** | Wall Tool 2.0 (Click-Move-Click) | ✅ Complete (all drawing features done) |
-| **Phase 3** | 2D Visualization | ⏳ 30% (crosshair done, plan drawing pending) |
+| **Phase 1** | Viewport & Input (CAD Feel) | ✅ Complete |
+| **Phase 2** | Wall Tool 2.0 (Click-Move-Click) | ✅ Complete |
+| **Phase 3** | 2D Visualization | ⏳ 30% |
 | **Phase 4** | Room Detection & Generation | ❌ Not Started |
-| **Phase 5** | Properties & Editing | ⏳ 60% (SelectTool done, UI pending) |
+| **Phase 5** | Properties & Editing | ⏳ 60% |
+| **Phase 6** | **Floor & Ceiling Drafting** | ⏳ New |
 
 ---
 
@@ -360,6 +453,12 @@ This section tracks the implementation of C++ handlers for each Input Action.
 - Route tool commands through NetDriver
 - Server authority for edits
 - Permission system (Authoring vs Viewer)
+
+### Milestone 6: Floor & Ceiling Drafting (New)
+- Implement Floor/Ceiling data models
+- Implement Drafting Mode switching
+- Implement Pen Tool and Extrusion tools
+- Implement Reflected Ceiling Plan view
 
 ---
 
